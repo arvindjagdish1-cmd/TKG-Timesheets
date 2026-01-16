@@ -1,0 +1,22 @@
+[
+  {"model": "expenses.expensecategory", "pk": 1, "fields": {"name": "Marketing - Meals", "active": true, "template_sheet": "Expenses-Main", "template_column": "E", "requires_client": false, "receipt_required_threshold": "20.00"}},
+  {"model": "expenses.expensecategory", "pk": 2, "fields": {"name": "Marketing - Entertainment", "active": true, "template_sheet": "Expenses-Main", "template_column": "F", "requires_client": false, "receipt_required_threshold": "20.00"}},
+  {"model": "expenses.expensecategory", "pk": 3, "fields": {"name": "Marketing - General", "active": true, "template_sheet": "Expenses-Main", "template_column": "G", "requires_client": false, "receipt_required_threshold": "20.00"}},
+
+  {"model": "expenses.expensecategory", "pk": 4, "fields": {"name": "Recruiting - Meals", "active": true, "template_sheet": "Expenses-Main", "template_column": "H", "requires_client": false, "receipt_required_threshold": "20.00"}},
+  {"model": "expenses.expensecategory", "pk": 5, "fields": {"name": "Recruiting - Entertainment", "active": true, "template_sheet": "Expenses-Main", "template_column": "I", "requires_client": false, "receipt_required_threshold": "20.00"}},
+  {"model": "expenses.expensecategory", "pk": 6, "fields": {"name": "Recruiting - General", "active": true, "template_sheet": "Expenses-Main", "template_column": "J", "requires_client": false, "receipt_required_threshold": "20.00"}},
+
+  {"model": "expenses.expensecategory", "pk": 7, "fields": {"name": "Keystone - Meals", "active": true, "template_sheet": "Expenses-Main", "template_column": "K", "requires_client": false, "receipt_required_threshold": "20.00"}},
+  {"model": "expenses.expensecategory", "pk": 8, "fields": {"name": "Keystone - Entertainment", "active": true, "template_sheet": "Expenses-Main", "template_column": "L", "requires_client": false, "receipt_required_threshold": "20.00"}},
+  {"model": "expenses.expensecategory", "pk": 9, "fields": {"name": "Keystone - General", "active": true, "template_sheet": "Expenses-Main", "template_column": "M", "requires_client": false, "receipt_required_threshold": "20.00"}},
+
+  {"model": "expenses.expensecategory", "pk": 10, "fields": {"name": "Travel", "active": true, "template_sheet": "Expenses-Main", "template_column": "N", "requires_client": false, "receipt_required_threshold": "20.00"}},
+  {"model": "expenses.expensecategory", "pk": 11, "fields": {"name": "Office - Supplies", "active": true, "template_sheet": "Expenses-Main", "template_column": "O", "requires_client": false, "receipt_required_threshold": "20.00"}},
+  {"model": "expenses.expensecategory", "pk": 12, "fields": {"name": "Computer - Expenses", "active": true, "template_sheet": "Expenses-Main", "template_column": "P", "requires_client": false, "receipt_required_threshold": "20.00"}},
+
+  {"model": "expenses.expensecategory", "pk": 13, "fields": {"name": "Training", "active": true, "template_sheet": "Expenses-Main", "template_column": "Q", "requires_client": false, "receipt_required_threshold": "20.00"}},
+  {"model": "expenses.expensecategory", "pk": 14, "fields": {"name": "Dues & Subscriptions", "active": true, "template_sheet": "Expenses-Main", "template_column": "R", "requires_client": false, "receipt_required_threshold": "20.00"}},
+  {"model": "expenses.expensecategory", "pk": 15, "fields": {"name": "Telecom - Phone", "active": true, "template_sheet": "Expenses-Main", "template_column": "S", "requires_client": false, "receipt_required_threshold": "20.00"}},
+  {"model": "expenses.expensecategory", "pk": 16, "fields": {"name": "Other", "active": true, "template_sheet": "Expenses-Main", "template_column": "T", "requires_client": false, "receipt_required_threshold": "20.00"}}
+]
