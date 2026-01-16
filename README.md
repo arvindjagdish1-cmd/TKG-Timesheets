@@ -4,7 +4,7 @@
 
 Internal web app to replace the company’s spreadsheet-and-email timesheet/expense workflow with a secure, role-based portal that still exports **Excel/PDF** in the existing formats.
 
-This repo is intentionally set up so you can build quickly in Cursor:
+This repo is intentionally set up so we can build quickly:
 - minimal frontend (server-rendered Django templates)
 - strong built-in admin UI (Django admin)
 - Microsoft OAuth login (Entra ID / Azure AD) with **required email domain** and optional **tenant restriction**
