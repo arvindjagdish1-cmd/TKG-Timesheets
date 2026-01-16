@@ -1,0 +1,65 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: bash -lc "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    env_file: .env
+    volumes:
+      - .:/app
+      - media:/app/media
+      - exports:/app/exports
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tkg_te}
+      POSTGRES_USER: ${POSTGRES_USER:-tkg_te}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tkg_te}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: bash -lc "celery -A tkg_te worker -l INFO"
+    env_file: .env
+    volumes:
+      - .:/app
+      - media:/app/media
+      - exports:/app/exports
+    depends_on:
+      - db
+      - redis
+
+  beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: bash -lc "celery -A tkg_te beat -l INFO"
+    env_file: .env
+    volumes:
+      - .:/app
+      - media:/app/media
+      - exports:/app/exports
+    depends_on:
+      - db
+      - redis
+
+volumes:
+  pgdata:
+  media:
+  exports:
