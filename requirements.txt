@@ -1,0 +1,16 @@
+Django>=5.0,<5.3
+psycopg[binary]>=3.1,<4.0
+django-environ>=0.11,<1.0
+django-allauth>=0.60,<1.0
+django-simple-history>=3.7,<4.0
+whitenoise>=6.7,<7.0
+
+celery>=5.4,<6.0
+redis>=5.0,<6.0
+
+openpyxl>=3.1,<4.0
+pypdf>=5.0,<6.0
+python-dateutil>=2.9,<3.0
+
+# Optional (nice for minimal JS dynamic forms)
+django-htmx>=1.18,<2.0
