@@ -1,0 +1,12 @@
+<tr id="mileage-row-{{ entry.id }}">
+    <td>{{ entry.date|date:"M j, Y" }}</td>
+    <td>{{ entry.description }}</td>
+    <td class="text-end" style="font-family: var(--font-mono);">{{ entry.miles }}</td>
+    <td class="text-end" style="font-family: var(--font-mono);">${{ entry.rate|floatformat:3 }}</td>
+    <td class="text-end" style="font-family: var(--font-mono);">${{ entry.total_amount|floatformat:2 }}</td>
+    <td class="text-end">
+        <button type="button" class="btn btn-sm btn-link text-danger p-0" onclick="deleteMileage({{ entry.id }})">
+            <i class="bi bi-trash"></i>
+        </button>
+    </td>
+</tr>

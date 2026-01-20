@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% load timesheet_tags %}
+
+{% block title %}Review Timesheet - {{ timesheet.employee.get_full_name }} - TKG T&E{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-start">
+    <div>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-2">
+                <li class="breadcrumb-item"><a href="{% url 'reviews:dashboard' %}">Reviews</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'reviews:pending' %}">Pending</a></li>
+                <li class="breadcrumb-item active">Timesheet</li>
+            </ol>
+        </nav>
+        <h1>{{ timesheet.employee.get_full_name }}</h1>
+        <p class="text-muted mb-0">{{ timesheet.period.display_name }} · Submitted {{ timesheet.submitted_at|date:"M j, Y g:i A" }}</p>
+    </div>
+    <div class="text-end">
+        <span class="badge-status badge-{{ timesheet.status|lower }}" style="font-size: 0.9rem;">{{ timesheet.get_status_display }}</span>
+        <div class="h4 mb-0 mt-2" style="font-family: var(--font-mono);">{{ timesheet.total_hours }} hrs</div>
+    </div>
+</div>
+
+<!-- Time Entries -->
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="bi bi-table me-2"></i>Time Entries
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-bordered mb-0 timesheet-grid">
+                <thead class="table-light">
+                    <tr>
+                        <th class="charge-code-cell">Charge Code</th>
+                        {% for d in dates %}
+                        <th class="day-header {% if d.weekday >= 5 %}weekend{% endif %}">
+                            <span class="day-num">{{ d.day }}</span>
+                            {{ d|date:"D" }}
+                        </th>
+                        {% endfor %}
+                        <th class="total-cell">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for line in lines %}
+                    <tr>
+                        <td class="charge-code-cell">
+                            <strong>{{ line.charge_code.code }}</strong>
+                            {% if line.label %}<br><small class="text-muted">{{ line.label }}</small>{% endif %}
+                        </td>
+                        {% for d in dates %}
+                        <td class="{% if d.weekday >= 5 %}weekend{% endif %} text-center">
+                            {% with hours=entry_data|get_item:line.id|get_item:d %}
+                            {% if hours %}{{ hours }}{% else %}<span class="text-muted">-</span>{% endif %}
+                            {% endwith %}
+                        </td>
+                        {% endfor %}
+                        <td class="total-cell">{{ line.total_hours }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="{{ dates|length|add:2 }}" class="text-center py-4 text-muted">
+                            No time entries.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-light">
+                    <tr>
+                        <th>Total</th>
+                        {% for d in dates %}
+                        <th class="{% if d.weekday >= 5 %}weekend{% endif %}"></th>
+                        {% endfor %}
+                        <th class="total-cell">{{ timesheet.total_hours }}</th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Employee Notes -->
+{% if timesheet.employee_notes %}
+<div class="card mb-4">
+    <div class="card-header"><i class="bi bi-chat-left-text me-2"></i>Employee Notes</div>
+    <div class="card-body">{{ timesheet.employee_notes|linebreaks }}</div>
+</div>
+{% endif %}
+
+<!-- Review History -->
+{% if actions %}
+<div class="card mb-4">
+    <div class="card-header"><i class="bi bi-clock-history me-2"></i>Review History</div>
+    <div class="card-body p-0">
+        <ul class="list-group list-group-flush">
+            {% for action in actions %}
+            <li class="list-group-item">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <strong>{{ action.get_action_display }}</strong> by {{ action.actor.get_full_name }}
+                        {% if action.comment %}<br><small>{{ action.comment }}</small>{% endif %}
+                    </div>
+                    <small class="text-muted">{{ action.created_at|date:"M j, g:i A" }}</small>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endif %}
+
+<!-- Review Actions -->
+{% if timesheet.status == "SUBMITTED" %}
+<div class="card mb-4 border-primary">
+    <div class="card-header bg-primary text-white">
+        <i class="bi bi-check2-square me-2"></i>Review Actions
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <form action="{% url 'reviews:approve_timesheet' timesheet.pk %}" method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">Approval Comment (optional)</label>
+                        <input type="text" class="form-control" name="comment" placeholder="e.g., Looks good!">
+                    </div>
+                    <button type="submit" class="btn btn-success w-100">
+                        <i class="bi bi-check-circle me-2"></i>Approve Timesheet
+                    </button>
+                </form>
+            </div>
+            <div class="col-md-6">
+                <form action="{% url 'reviews:return_timesheet' timesheet.pk %}" method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">Return Reason <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="comment" required placeholder="e.g., Missing hours for Tuesday">
+                    </div>
+                    <button type="submit" class="btn btn-warning w-100">
+                        <i class="bi bi-arrow-return-left me-2"></i>Return for Revision
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Navigation -->
+<div class="d-flex gap-2">
+    <a href="{% url 'reviews:pending' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-2"></i>Back to Pending
+    </a>
+</div>
+{% endblock %}

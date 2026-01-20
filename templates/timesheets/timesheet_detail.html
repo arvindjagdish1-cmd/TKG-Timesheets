@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% load timesheet_tags %}
+
+{% block title %}Timesheet - {{ timesheet.period.display_name }} - TKG T&E{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-start">
+    <div>
+        <h1>Timesheet</h1>
+        <p class="text-muted mb-0">{{ timesheet.period.display_name }} · {{ timesheet.employee.get_full_name }}</p>
+    </div>
+    <div class="d-flex align-items-center gap-3">
+        <span class="badge-status badge-{{ timesheet.status|lower }}" style="font-size: 0.9rem;">
+            {{ timesheet.get_status_display }}
+        </span>
+        <span class="h4 mb-0" style="font-family: var(--font-mono);">{{ timesheet.total_hours }} hrs</span>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="bi bi-table me-2"></i>Time Entries
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-bordered mb-0 timesheet-grid">
+                <thead class="table-light">
+                    <tr>
+                        <th class="charge-code-cell">Charge Code</th>
+                        {% for d in dates %}
+                        <th class="day-header {% if d.weekday >= 5 %}weekend{% endif %}">
+                            <span class="day-num">{{ d.day }}</span>
+                            {{ d|date:"D" }}
+                        </th>
+                        {% endfor %}
+                        <th class="total-cell">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for line in lines %}
+                    <tr>
+                        <td class="charge-code-cell">
+                            <strong>{{ line.charge_code.code }}</strong>
+                            {% if line.label %}<br><small class="text-muted">{{ line.label }}</small>{% endif %}
+                        </td>
+                        {% for d in dates %}
+                        <td class="{% if d.weekday >= 5 %}weekend{% endif %} text-center">
+                            {% with hours=entry_data|get_item:line.id|get_item:d %}
+                            {% if hours %}{{ hours }}{% else %}<span class="text-muted">-</span>{% endif %}
+                            {% endwith %}
+                        </td>
+                        {% endfor %}
+                        <td class="total-cell">{{ line.total_hours }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="{{ dates|length|add:2 }}" class="text-center py-4 text-muted">
+                            No time entries recorded.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-light">
+                    <tr>
+                        <th class="charge-code-cell">Daily Total</th>
+                        {% for d in dates %}
+                        <th class="{% if d.weekday >= 5 %}weekend{% endif %}">
+                            {% with day_total=0 %}
+                            {% for line in lines %}
+                            {% with hours=entry_data|get_item:line.id|get_item:d %}
+                            {% if hours %}<!-- {{ hours }} -->{% endif %}
+                            {% endwith %}
+                            {% endfor %}
+                            {% endwith %}
+                        </th>
+                        {% endfor %}
+                        <th class="total-cell">{{ timesheet.total_hours }}</th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% if timesheet.employee_notes %}
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="bi bi-chat-left-text me-2"></i>Employee Notes
+    </div>
+    <div class="card-body">
+        {{ timesheet.employee_notes|linebreaks }}
+    </div>
+</div>
+{% endif %}
+
+{% if timesheet.reviewer_notes %}
+<div class="card mb-4 border-warning">
+    <div class="card-header bg-warning-subtle">
+        <i class="bi bi-chat-right-text me-2"></i>Reviewer Notes
+    </div>
+    <div class="card-body">
+        {{ timesheet.reviewer_notes|linebreaks }}
+    </div>
+</div>
+{% endif %}
+
+<!-- Submission Info -->
+{% if timesheet.submitted_at %}
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="bi bi-info-circle me-2"></i>Submission Details
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <small class="text-muted">Submitted</small>
+                <p class="mb-0">{{ timesheet.submitted_at|date:"M j, Y g:i A" }}</p>
+            </div>
+            {% if timesheet.approved_at %}
+            <div class="col-md-4">
+                <small class="text-muted">Approved</small>
+                <p class="mb-0">{{ timesheet.approved_at|date:"M j, Y g:i A" }}</p>
+            </div>
+            <div class="col-md-4">
+                <small class="text-muted">Approved By</small>
+                <p class="mb-0">{{ timesheet.approved_by.get_full_name }}</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Action Buttons -->
+<div class="d-flex gap-2 flex-wrap">
+    <a href="{% url 'timesheets:dashboard' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-2"></i>Dashboard
+    </a>
+    <a href="{% url 'timesheets:timesheet_list' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-list me-2"></i>All Timesheets
+    </a>
+
+    {% if timesheet.is_editable and timesheet.employee == request.user %}
+    <div class="flex-grow-1"></div>
+    <a href="{% url 'timesheets:timesheet_edit' timesheet.pk %}" class="btn btn-primary">
+        <i class="bi bi-pencil me-2"></i>Edit Timesheet
+    </a>
+
+    {% if lines %}
+    <form action="{% url 'timesheets:timesheet_submit' timesheet.pk %}" method="post" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-accent" onclick="return confirm('Submit this timesheet? You won\'t be able to edit it after submission.');">
+            <i class="bi bi-send me-2"></i>Submit
+        </button>
+    </form>
+    {% endif %}
+    {% endif %}
+</div>
+{% endblock %}

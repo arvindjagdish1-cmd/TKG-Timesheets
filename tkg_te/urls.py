@@ -7,8 +7,11 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("accounts/", include("allauth.urls")),
 
-    # App routes (to be implemented)
-    path("", include("apps.timesheets.urls")),  # e.g. dashboard
+    # App routes
+    path("", include("apps.timesheets.urls")),
+    path("", include("apps.expenses.urls")),
+    path("", include("apps.reviews.urls")),
+    path("", include("apps.exports.urls")),
 ]
 
 if settings.DEBUG:

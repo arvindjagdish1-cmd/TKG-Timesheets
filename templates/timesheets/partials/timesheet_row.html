@@ -1,0 +1,27 @@
+<tr id="line-row-{{ line.id }}" data-line-id="{{ line.id }}">
+    <td class="charge-code-cell">
+        <strong>{{ line.charge_code.code }}</strong>
+        {% if line.label %}<br><small class="text-muted">{{ line.label }}</small>{% endif %}
+    </td>
+    {% for d in dates %}
+    <td class="{% if d.weekday >= 5 %}weekend{% endif %}">
+        <input type="number"
+               class="form-control form-control-sm hours-input"
+               data-line-id="{{ line.id }}"
+               data-date="{{ d|date:'Y-m-d' }}"
+               step="0.25"
+               min="0"
+               max="24"
+               value="{% if entry_data and line.id in entry_data %}{% if d in entry_data|get_item:line.id %}{{ entry_data|get_item:line.id|get_item:d }}{% endif %}{% endif %}"
+               placeholder="0"
+               onchange="saveEntry(this)"
+               onkeyup="if(event.key === 'Tab' || event.key === 'Enter') saveEntry(this)">
+    </td>
+    {% endfor %}
+    <td class="total-cell" id="line-total-{{ line.id }}">{{ line.total_hours }}</td>
+    <td class="text-center">
+        <button type="button" class="btn btn-sm btn-link text-danger p-0" onclick="deleteLine({{ line.id }})" title="Remove line">
+            <i class="bi bi-trash"></i>
+        </button>
+    </td>
+</tr>

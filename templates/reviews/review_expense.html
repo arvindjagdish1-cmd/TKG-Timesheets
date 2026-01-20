@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+
+{% block title %}Review Expenses - {{ report.employee.get_full_name }} - TKG T&E{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-start">
+    <div>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-2">
+                <li class="breadcrumb-item"><a href="{% url 'reviews:dashboard' %}">Reviews</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'reviews:pending' %}">Pending</a></li>
+                <li class="breadcrumb-item active">Expense Report</li>
+            </ol>
+        </nav>
+        <h1>{{ report.employee.get_full_name }}</h1>
+        <p class="text-muted mb-0">{{ report.month.display_name }} · Submitted {{ report.submitted_at|date:"M j, Y g:i A" }}</p>
+    </div>
+    <div class="text-end">
+        <span class="badge-status badge-{{ report.status|lower }}" style="font-size: 0.9rem;">{{ report.get_status_display }}</span>
+        <div class="h4 mb-0 mt-2" style="font-family: var(--font-mono);">${{ report.grand_total|floatformat:2 }}</div>
+    </div>
+</div>
+
+<!-- Summary -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <div class="text-muted small">Expenses</div>
+                <div class="h4 mb-0">${{ report.total_expenses|floatformat:2 }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <div class="text-muted small">Mileage</div>
+                <div class="h4 mb-0">${{ report.total_mileage_amount|floatformat:2 }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center bg-primary text-white">
+            <div class="card-body">
+                <div class="small opacity-75">Total</div>
+                <div class="h4 mb-0">${{ report.grand_total|floatformat:2 }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Expense Items -->
+{% if items %}
+<div class="card mb-4">
+    <div class="card-header"><i class="bi bi-receipt me-2"></i>Expense Items</div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Category</th>
+                        <th>Description</th>
+                        <th>Client</th>
+                        <th class="text-center">Receipt</th>
+                        <th class="text-end">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                    <tr>
+                        <td>{{ item.date|date:"M j" }}</td>
+                        <td>{{ item.category.name }}</td>
+                        <td>{{ item.description }}</td>
+                        <td>{{ item.client|default:"-" }}</td>
+                        <td class="text-center">
+                            {% if item.receipts.exists %}
+                            {% for r in item.receipts.all %}
+                            <a href="{{ r.file.url }}" target="_blank" class="badge bg-success me-1">
+                                <i class="bi bi-paperclip"></i>
+                            </a>
+                            {% endfor %}
+                            {% elif item.paper_receipt_delivered %}
+                            <span class="badge bg-info">Paper</span>
+                            {% elif item.requires_receipt %}
+                            <span class="badge bg-danger">Missing!</span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end" style="font-family: var(--font-mono);">${{ item.amount|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-light">
+                    <tr>
+                        <th colspan="5">Total</th>
+                        <th class="text-end" style="font-family: var(--font-mono);">${{ report.total_expenses|floatformat:2 }}</th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Mileage -->
+{% if mileage_entries %}
+<div class="card mb-4">
+    <div class="card-header"><i class="bi bi-car-front me-2"></i>Mileage</div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Description</th>
+                        <th class="text-end">Miles</th>
+                        <th class="text-end">Rate</th>
+                        <th class="text-end">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in mileage_entries %}
+                    <tr>
+                        <td>{{ entry.date|date:"M j" }}</td>
+                        <td>{{ entry.description }}</td>
+                        <td class="text-end">{{ entry.miles }}</td>
+                        <td class="text-end">${{ entry.rate|floatformat:3 }}</td>
+                        <td class="text-end" style="font-family: var(--font-mono);">${{ entry.total_amount|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-light">
+                    <tr>
+                        <th colspan="4">Total</th>
+                        <th class="text-end" style="font-family: var(--font-mono);">${{ report.total_mileage_amount|floatformat:2 }}</th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Employee Notes -->
+{% if report.employee_notes %}
+<div class="card mb-4">
+    <div class="card-header"><i class="bi bi-chat-left-text me-2"></i>Employee Notes</div>
+    <div class="card-body">{{ report.employee_notes|linebreaks }}</div>
+</div>
+{% endif %}
+
+<!-- Review Actions -->
+{% if report.status == "SUBMITTED" %}
+<div class="card mb-4 border-primary">
+    <div class="card-header bg-primary text-white">
+        <i class="bi bi-check2-square me-2"></i>Review Actions
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <form action="{% url 'reviews:approve_expense' report.pk %}" method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">Approval Comment (optional)</label>
+                        <input type="text" class="form-control" name="comment" placeholder="e.g., All receipts verified">
+                    </div>
+                    <button type="submit" class="btn btn-success w-100">
+                        <i class="bi bi-check-circle me-2"></i>Approve Report
+                    </button>
+                </form>
+            </div>
+            <div class="col-md-6">
+                <form action="{% url 'reviews:return_expense' report.pk %}" method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">Return Reason <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="comment" required placeholder="e.g., Missing receipt for travel expense">
+                    </div>
+                    <button type="submit" class="btn btn-warning w-100">
+                        <i class="bi bi-arrow-return-left me-2"></i>Return for Revision
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="d-flex gap-2">
+    <a href="{% url 'reviews:pending' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-2"></i>Back to Pending
+    </a>
+</div>
+{% endblock %}

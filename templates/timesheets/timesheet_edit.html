@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Timesheet - {{ timesheet.period.display_name }} - TKG T&E{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-start">
+    <div>
+        <h1>Edit Timesheet</h1>
+        <p class="text-muted mb-0">{{ timesheet.period.display_name }} · Due {{ timesheet.period.due_date|date:"M j, Y" }}</p>
+    </div>
+    <div class="d-flex align-items-center gap-3">
+        <span class="badge-status badge-{{ timesheet.status|lower }}">{{ timesheet.get_status_display }}</span>
+        <span id="grand-total" class="h5 mb-0" style="font-family: var(--font-mono);">{{ timesheet.total_hours }} hrs</span>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-table me-2"></i>Time Entries</span>
+        <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addLineModal">
+            <i class="bi bi-plus-circle me-1"></i>Add Charge Code
+        </button>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-bordered mb-0 timesheet-grid" id="timesheet-table">
+                <thead class="table-light">
+                    <tr>
+                        <th class="charge-code-cell" style="min-width: 180px;">Charge Code</th>
+                        {% for d in dates %}
+                        <th class="day-header {% if d.weekday >= 5 %}weekend{% endif %}" data-date="{{ d|date:'Y-m-d' }}">
+                            <span class="day-num">{{ d.day }}</span>
+                            {{ d|date:"D" }}
+                        </th>
+                        {% endfor %}
+                        <th class="total-cell" style="min-width: 70px;">Total</th>
+                        <th style="width: 40px;"></th>
+                    </tr>
+                </thead>
+                <tbody id="timesheet-body">
+                    {% for line in lines %}
+                    {% include "timesheets/partials/timesheet_row.html" with line=line dates=dates entry_data=entry_data timesheet=timesheet %}
+                    {% empty %}
+                    <tr id="empty-row">
+                        <td colspan="{{ dates|length|add:3 }}" class="text-center py-4 text-muted">
+                            <i class="bi bi-inbox h3 d-block mb-2"></i>
+                            No charge codes added yet. Click "Add Charge Code" to get started.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-light">
+                    <tr>
+                        <th class="charge-code-cell">Daily Total</th>
+                        {% for d in dates %}
+                        <th class="{% if d.weekday >= 5 %}weekend{% endif %} day-total" id="day-{{ d|date:'Y-m-d' }}">0</th>
+                        {% endfor %}
+                        <th class="total-cell" id="period-total">{{ timesheet.total_hours }}</th>
+                        <th></th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Notes Section -->
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="bi bi-chat-left-text me-2"></i>Notes for Reviewer
+    </div>
+    <div class="card-body">
+        <div class="position-relative">
+            <textarea 
+                class="form-control" 
+                name="employee_notes" 
+                rows="3" 
+                placeholder="Add any notes for your reviewer (optional)..."
+                hx-post="{% url 'timesheets:timesheet_save_notes' timesheet.pk %}"
+                hx-trigger="change, keyup delay:1000ms changed"
+                hx-target="#notes-status"
+                hx-swap="innerHTML"
+            >{{ timesheet.employee_notes }}</textarea>
+            <small id="notes-status" class="position-absolute end-0 bottom-0 me-2 mb-2"></small>
+        </div>
+    </div>
+</div>
+
+{% if timesheet.reviewer_notes %}
+<div class="alert alert-warning mb-4">
+    <h6 class="alert-heading"><i class="bi bi-exclamation-triangle me-2"></i>Reviewer Notes</h6>
+    {{ timesheet.reviewer_notes }}
+</div>
+{% endif %}
+
+<!-- Action Buttons -->
+<div class="d-flex gap-2 flex-wrap">
+    <a href="{% url 'timesheets:timesheet_detail' timesheet.pk %}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-2"></i>Back
+    </a>
+    <div class="flex-grow-1"></div>
+    {% if lines %}
+    <form action="{% url 'timesheets:timesheet_submit' timesheet.pk %}" method="post" class="d-inline" id="submit-form">
+        {% csrf_token %}
+        <button type="button" class="btn btn-accent" onclick="confirmSubmit()">
+            <i class="bi bi-send me-2"></i>Submit for Review
+        </button>
+    </form>
+    {% endif %}
+</div>
+
+<!-- Add Line Modal -->
+<div class="modal fade" id="addLineModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Charge Code</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form hx-post="{% url 'timesheets:timesheet_add_line' timesheet.pk %}"
+                  hx-target="#timesheet-body"
+                  hx-swap="beforeend"
+                  hx-on::after-request="if(event.detail.successful) { bootstrap.Modal.getInstance(document.getElementById('addLineModal')).hide(); this.reset(); document.getElementById('empty-row')?.remove(); recalculateTotals(); }">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Charge Code <span class="text-danger">*</span></label>
+                        <select class="form-select" name="charge_code" required>
+                            <option value="">Select a charge code...</option>
+                            {% for code in available_codes %}
+                            <option value="{{ code.pk }}">{{ code.code }} - {{ code.description }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Label/Description (optional)</label>
+                        <input type="text" class="form-control" name="label" placeholder="e.g., Client name or project description">
+                        <div class="form-text">Use this for client work to specify the client or engagement.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-plus-circle me-1"></i>Add Line
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+<script>
+// Configure HTMX to include CSRF token
+document.body.addEventListener('htmx:configRequest', function(evt) {
+    evt.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
+});
+
+function saveEntry(input) {
+    const lineId = input.dataset.lineId;
+    const date = input.dataset.date;
+    const hours = input.value || '0';
+
+    fetch('{% url "timesheets:timesheet_save_entry" timesheet.pk %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: `line_id=${lineId}&date=${date}&hours=${hours}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Update line total
+            document.getElementById(`line-total-${lineId}`).textContent = data.line_total;
+            // Update day total
+            document.getElementById(`day-${date}`).textContent = data.day_total;
+            // Update grand total
+            document.getElementById('period-total').textContent = data.grand_total;
+            document.getElementById('grand-total').textContent = data.grand_total + ' hrs';
+
+            // Visual feedback
+            input.classList.add('bg-success-subtle');
+            setTimeout(() => input.classList.remove('bg-success-subtle'), 300);
+        }
+    })
+    .catch(error => {
+        console.error('Error saving entry:', error);
+        input.classList.add('bg-danger-subtle');
+        setTimeout(() => input.classList.remove('bg-danger-subtle'), 1000);
+    });
+}
+
+function deleteLine(lineId) {
+    if (!confirm('Remove this charge code line?')) return;
+
+    fetch(`/timesheet/{{ timesheet.pk }}/delete-line/${lineId}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}'
+        }
+    })
+    .then(response => {
+        if (response.ok) {
+            document.getElementById(`line-row-${lineId}`).remove();
+            recalculateTotals();
+        }
+    });
+}
+
+function recalculateTotals() {
+    // Recalculate all totals from inputs
+    const inputs = document.querySelectorAll('.hours-input');
+    const lineTotals = {};
+    const dayTotals = {};
+    let grandTotal = 0;
+
+    inputs.forEach(input => {
+        const lineId = input.dataset.lineId;
+        const date = input.dataset.date;
+        const value = parseFloat(input.value) || 0;
+
+        lineTotals[lineId] = (lineTotals[lineId] || 0) + value;
+        dayTotals[date] = (dayTotals[date] || 0) + value;
+        grandTotal += value;
+    });
+
+    // Update displays
+    Object.entries(lineTotals).forEach(([lineId, total]) => {
+        const el = document.getElementById(`line-total-${lineId}`);
+        if (el) el.textContent = total.toFixed(2);
+    });
+
+    Object.entries(dayTotals).forEach(([date, total]) => {
+        const el = document.getElementById(`day-${date}`);
+        if (el) el.textContent = total.toFixed(2);
+    });
+
+    document.getElementById('period-total').textContent = grandTotal.toFixed(2);
+    document.getElementById('grand-total').textContent = grandTotal.toFixed(2) + ' hrs';
+}
+
+function confirmSubmit() {
+    const total = document.getElementById('period-total').textContent;
+    if (confirm(`Submit timesheet with ${total} total hours?\n\nYou won't be able to edit it after submission.`)) {
+        document.getElementById('submit-form').submit();
+    }
+}
+
+// Initialize totals on page load
+document.addEventListener('DOMContentLoaded', recalculateTotals);
+</script>
+{% endblock %}

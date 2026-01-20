@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     "allauth.socialaccount",
     "allauth.socialaccount.providers.microsoft",
     "simple_history",
+    "django_htmx",
 
     # Local apps
     "apps.accounts",
@@ -61,6 +62,9 @@ MIDDLEWARE = [
 
     # allauth
     "allauth.account.middleware.AccountMiddleware",
+
+    # HTMX
+    "django_htmx.middleware.HtmxMiddleware",
 
     # audit trail
     "simple_history.middleware.HistoryRequestMiddleware",
@@ -203,21 +207,55 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_ALWAYS_EAGER = False  # keep False; set True only for tests
 
 # -------------------------
-# Reverse proxy / HTTPS hardening (enable in prod)
+# Reverse proxy / HTTPS hardening
 # -------------------------
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-# In production set:
-# SECURE_SSL_REDIRECT = True
-# SESSION_COOKIE_SECURE = True
-# CSRF_COOKIE_SECURE = True
-# SECURE_HSTS_SECONDS = 31536000
-# SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-# SECURE_HSTS_PRELOAD = True
 
+# Production security settings (auto-enabled when DEBUG=False)
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_BROWSER_XSS_FILTER = True
+    X_FRAME_OPTIONS = "DENY"
+
+# -------------------------
+# Logging
+# -------------------------
 LOG_LEVEL = env("LOG_LEVEL", default="INFO")
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "handlers": {"console": {"class": "logging.StreamHandler"}},
-    "root": {"handlers": ["console"], "level": LOG_LEVEL},
+    "formatters": {
+        "verbose": {
+            "format": "{levelname} {asctime} {module} {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": LOG_LEVEL,
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
+        "apps": {
+            "handlers": ["console"],
+            "level": "DEBUG" if DEBUG else "INFO",
+            "propagate": False,
+        },
+    },
 }

@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - TKG Time & Expense{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Dashboard</h1>
+    <p class="text-muted mb-0">Welcome back, {{ user.get_short_name|default:user.email }}</p>
+</div>
+
+<div class="row g-4">
+    <!-- Current Timesheet Card -->
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-clock me-2"></i>Current Timesheet</span>
+                {% if current_timesheet %}
+                <span class="badge-status badge-{{ current_timesheet.status|lower }}">
+                    {{ current_timesheet.get_status_display }}
+                </span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if current_timesheet %}
+                <h5 class="mb-3">{{ current_ts_period.display_name }}</h5>
+
+                <div class="row text-center mb-4">
+                    <div class="col">
+                        <div class="text-muted small">Hours Logged</div>
+                        <div class="h3 mb-0" style="font-family: var(--font-mono);">{{ current_timesheet.total_hours }}</div>
+                    </div>
+                    <div class="col">
+                        <div class="text-muted small">Due Date</div>
+                        <div class="h5 mb-0">{{ current_ts_period.due_date|date:"M j" }}</div>
+                    </div>
+                    <div class="col">
+                        <div class="text-muted small">Status</div>
+                        <div class="h6 mb-0">
+                            {% if current_ts_period.is_past_due and current_timesheet.status == 'DRAFT' %}
+                            <span class="text-danger"><i class="bi bi-exclamation-triangle"></i> Overdue</span>
+                            {% else %}
+                            {{ current_timesheet.get_status_display }}
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-grid gap-2">
+                    {% if current_timesheet.is_editable %}
+                    <a href="{% url 'timesheets:timesheet_edit' current_timesheet.pk %}" class="btn btn-primary">
+                        <i class="bi bi-pencil me-2"></i>Edit Timesheet
+                    </a>
+                    {% else %}
+                    <a href="{% url 'timesheets:timesheet_detail' current_timesheet.pk %}" class="btn btn-outline-primary">
+                        <i class="bi bi-eye me-2"></i>View Timesheet
+                    </a>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="text-center py-4 text-muted">
+                    <i class="bi bi-calendar-x h1 d-block mb-3"></i>
+                    <p>No timesheet period is currently active.</p>
+                    <p class="small">Contact your administrator if you believe this is an error.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Current Expense Report Card -->
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-receipt me-2"></i>Current Expense Report</span>
+                {% if current_expense %}
+                <span class="badge-status badge-{{ current_expense.status|lower }}">
+                    {{ current_expense.get_status_display }}
+                </span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if current_expense %}
+                <h5 class="mb-3">{{ current_expense_month.display_name }}</h5>
+
+                <div class="row text-center mb-4">
+                    <div class="col">
+                        <div class="text-muted small">Total Expenses</div>
+                        <div class="h3 mb-0" style="font-family: var(--font-mono);">${{ current_expense.grand_total|floatformat:2 }}</div>
+                    </div>
+                    <div class="col">
+                        <div class="text-muted small">Due Date</div>
+                        <div class="h5 mb-0">{{ current_expense_month.due_date|date:"M j" }}</div>
+                    </div>
+                    <div class="col">
+                        <div class="text-muted small">Items</div>
+                        <div class="h5 mb-0">{{ current_expense.items.count }}</div>
+                    </div>
+                </div>
+
+                <div class="d-grid gap-2">
+                    {% if current_expense.is_editable %}
+                    <a href="{% url 'expenses:expense_edit' current_expense.pk %}" class="btn btn-success">
+                        <i class="bi bi-plus-circle me-2"></i>Add/Edit Expenses
+                    </a>
+                    {% else %}
+                    <a href="{% url 'expenses:expense_detail' current_expense.pk %}" class="btn btn-outline-success">
+                        <i class="bi bi-eye me-2"></i>View Report
+                    </a>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="text-center py-4 text-muted">
+                    <i class="bi bi-calendar-x h1 d-block mb-3"></i>
+                    <p>No expense period is currently active.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-clock-history me-2"></i>Recent Submissions</span>
+                <div>
+                    <a href="{% url 'timesheets:timesheet_list' %}" class="btn btn-sm btn-outline-secondary me-2">All Timesheets</a>
+                    <a href="{% url 'expenses:expense_list' %}" class="btn btn-sm btn-outline-secondary">All Expenses</a>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Period</th>
+                                <th>Status</th>
+                                <th>Submitted</th>
+                                <th class="text-end">Amount/Hours</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for ts in timesheets %}
+                            <tr>
+                                <td><i class="bi bi-clock text-primary me-2"></i>Timesheet</td>
+                                <td>{{ ts.period.display_name }}</td>
+                                <td><span class="badge-status badge-{{ ts.status|lower }}">{{ ts.get_status_display }}</span></td>
+                                <td>{{ ts.submitted_at|date:"M j, Y"|default:"-" }}</td>
+                                <td class="text-end" style="font-family: var(--font-mono);">{{ ts.total_hours }} hrs</td>
+                                <td class="text-end">
+                                    {% if ts.is_editable %}
+                                    <a href="{% url 'timesheets:timesheet_edit' ts.pk %}" class="btn btn-sm btn-primary">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    {% else %}
+                                    <a href="{% url 'timesheets:timesheet_detail' ts.pk %}" class="btn btn-sm btn-outline-secondary">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="6" class="text-center py-4 text-muted">
+                                    No timesheets yet
+                                </td>
+                            </tr>
+                            {% endfor %}
+
+                            {% for er in expense_reports %}
+                            <tr>
+                                <td><i class="bi bi-receipt text-success me-2"></i>Expenses</td>
+                                <td>{{ er.month.display_name }}</td>
+                                <td><span class="badge-status badge-{{ er.status|lower }}">{{ er.get_status_display }}</span></td>
+                                <td>{{ er.submitted_at|date:"M j, Y"|default:"-" }}</td>
+                                <td class="text-end" style="font-family: var(--font-mono);">${{ er.grand_total|floatformat:2 }}</td>
+                                <td class="text-end">
+                                    {% if er.is_editable %}
+                                    <a href="{% url 'expenses:expense_edit' er.pk %}" class="btn btn-sm btn-success">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    {% else %}
+                                    <a href="{% url 'expenses:expense_detail' er.pk %}" class="btn btn-sm btn-outline-secondary">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            {% if not timesheets %}
+                            <tr>
+                                <td colspan="6" class="text-center py-4 text-muted">
+                                    No expense reports yet
+                                </td>
+                            </tr>
+                            {% endif %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

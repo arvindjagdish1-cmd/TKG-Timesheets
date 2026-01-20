@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Pending Reviews - TKG T&E{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Pending Reviews</h1>
+    <p class="text-muted mb-0">Submissions awaiting your review</p>
+</div>
+
+<div class="row g-4">
+    <!-- Pending Timesheets -->
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-clock me-2"></i>Pending Timesheets</span>
+                <span class="badge bg-primary">{{ pending_timesheets|length }}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for ts in pending_timesheets %}
+                    <a href="{% url 'reviews:review_timesheet' ts.pk %}" class="list-group-item list-group-item-action">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{{ ts.employee.get_full_name }}</strong>
+                                <br><small class="text-muted">{{ ts.period.display_name }}</small>
+                            </div>
+                            <div class="text-end">
+                                <span style="font-family: var(--font-mono);">{{ ts.total_hours }} hrs</span>
+                                <br><small class="text-muted">{{ ts.submitted_at|date:"M j, g:i A" }}</small>
+                            </div>
+                        </div>
+                    </a>
+                    {% empty %}
+                    <div class="list-group-item text-center py-4 text-muted">
+                        <i class="bi bi-check-circle h3 d-block mb-2 text-success"></i>
+                        All timesheets have been reviewed!
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pending Expenses -->
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-receipt me-2"></i>Pending Expense Reports</span>
+                <span class="badge bg-success">{{ pending_expenses|length }}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for er in pending_expenses %}
+                    <a href="{% url 'reviews:review_expense' er.pk %}" class="list-group-item list-group-item-action">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{{ er.employee.get_full_name }}</strong>
+                                <br><small class="text-muted">{{ er.month.display_name }}</small>
+                            </div>
+                            <div class="text-end">
+                                <span style="font-family: var(--font-mono);">${{ er.grand_total|floatformat:2 }}</span>
+                                <br><small class="text-muted">{{ er.submitted_at|date:"M j, g:i A" }}</small>
+                            </div>
+                        </div>
+                    </a>
+                    {% empty %}
+                    <div class="list-group-item text-center py-4 text-muted">
+                        <i class="bi bi-check-circle h3 d-block mb-2 text-success"></i>
+                        All expense reports have been reviewed!
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mt-4">
+    <a href="{% url 'reviews:dashboard' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+    </a>
+</div>
+{% endblock %}

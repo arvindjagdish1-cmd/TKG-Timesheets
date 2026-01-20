@@ -1,0 +1,414 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}TKG Time & Expense{% endblock %}</title>
+
+    <!-- Fonts: DM Sans for body, JetBrains Mono for numbers -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <!-- Bootstrap 5.3 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+
+    <style>
+        :root {
+            --tkg-primary: #1a365d;
+            --tkg-primary-light: #2c5282;
+            --tkg-accent: #ed8936;
+            --tkg-accent-hover: #dd6b20;
+            --tkg-success: #38a169;
+            --tkg-warning: #d69e2e;
+            --tkg-danger: #e53e3e;
+            --tkg-bg: #f7fafc;
+            --tkg-card-bg: #ffffff;
+            --tkg-text: #2d3748;
+            --tkg-text-muted: #718096;
+            --tkg-border: #e2e8f0;
+            --tkg-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+            --tkg-shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        body {
+            font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--tkg-bg);
+            color: var(--tkg-text);
+            min-height: 100vh;
+        }
+
+        /* Sidebar navigation */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 260px;
+            height: 100vh;
+            background: linear-gradient(180deg, var(--tkg-primary) 0%, var(--tkg-primary-light) 100%);
+            color: white;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-brand {
+            padding: 1.5rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .sidebar-brand h5 {
+            margin: 0;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+        }
+
+        .sidebar-brand small {
+            opacity: 0.7;
+            font-size: 0.75rem;
+        }
+
+        .sidebar-nav {
+            flex: 1;
+            padding: 1rem 0;
+            overflow-y: auto;
+        }
+
+        .nav-section {
+            padding: 0.5rem 1.5rem;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            opacity: 0.5;
+            margin-top: 1rem;
+        }
+
+        .nav-section:first-child {
+            margin-top: 0;
+        }
+
+        .sidebar .nav-link {
+            padding: 0.65rem 1.5rem;
+            color: rgba(255,255,255,0.8);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            transition: all 0.15s ease;
+            border-left: 3px solid transparent;
+        }
+
+        .sidebar .nav-link:hover {
+            background: rgba(255,255,255,0.1);
+            color: white;
+        }
+
+        .sidebar .nav-link.active {
+            background: rgba(255,255,255,0.15);
+            color: white;
+            border-left-color: var(--tkg-accent);
+        }
+
+        .sidebar .nav-link i {
+            font-size: 1.1rem;
+            width: 1.25rem;
+            text-align: center;
+        }
+
+        .sidebar .nav-link .badge {
+            margin-left: auto;
+            font-size: 0.65rem;
+        }
+
+        .sidebar-footer {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            font-size: 0.85rem;
+        }
+
+        .sidebar-footer .user-name {
+            font-weight: 500;
+        }
+
+        .sidebar-footer .user-email {
+            font-size: 0.75rem;
+            opacity: 0.7;
+        }
+
+        /* Main content */
+        .main-content {
+            margin-left: 260px;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .page-header {
+            margin-bottom: 2rem;
+        }
+
+        .page-header h1 {
+            font-size: 1.75rem;
+            font-weight: 600;
+            margin: 0;
+            color: var(--tkg-primary);
+        }
+
+        .page-header .breadcrumb {
+            margin: 0.5rem 0 0;
+            font-size: 0.85rem;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--tkg-card-bg);
+            border: 1px solid var(--tkg-border);
+            border-radius: 0.75rem;
+            box-shadow: var(--tkg-shadow);
+        }
+
+        .card-header {
+            background: transparent;
+            border-bottom: 1px solid var(--tkg-border);
+            padding: 1rem 1.25rem;
+            font-weight: 600;
+        }
+
+        /* Status badges */
+        .badge-status {
+            font-weight: 500;
+            padding: 0.35em 0.75em;
+            border-radius: 999px;
+            font-size: 0.75rem;
+        }
+
+        .badge-draft { background: #edf2f7; color: #4a5568; }
+        .badge-submitted { background: #fef3c7; color: #92400e; }
+        .badge-approved { background: #c6f6d5; color: #276749; }
+        .badge-returned { background: #fed7d7; color: #c53030; }
+
+        /* Buttons */
+        .btn-primary {
+            background: var(--tkg-primary);
+            border-color: var(--tkg-primary);
+        }
+
+        .btn-primary:hover {
+            background: var(--tkg-primary-light);
+            border-color: var(--tkg-primary-light);
+        }
+
+        .btn-accent {
+            background: var(--tkg-accent);
+            border-color: var(--tkg-accent);
+            color: white;
+        }
+
+        .btn-accent:hover {
+            background: var(--tkg-accent-hover);
+            border-color: var(--tkg-accent-hover);
+            color: white;
+        }
+
+        /* Tables */
+        .table th {
+            font-weight: 600;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: var(--tkg-text-muted);
+            border-bottom-width: 1px;
+        }
+
+        /* Timesheet grid */
+        .timesheet-grid {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+        }
+
+        .timesheet-grid th,
+        .timesheet-grid td {
+            text-align: center;
+            padding: 0.5rem;
+            min-width: 50px;
+        }
+
+        .timesheet-grid th.day-header {
+            font-size: 0.7rem;
+        }
+
+        .timesheet-grid th.day-header .day-num {
+            display: block;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .timesheet-grid .charge-code-cell {
+            text-align: left;
+            font-weight: 500;
+            min-width: 120px;
+        }
+
+        .timesheet-grid input[type="number"],
+        .timesheet-grid .hours-input {
+            width: 100%;
+            text-align: center;
+            border: 1px solid var(--tkg-border);
+            border-radius: 4px;
+            padding: 0.25rem;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+        }
+
+        .timesheet-grid input[type="number"]:focus,
+        .timesheet-grid .hours-input:focus {
+            border-color: var(--tkg-primary);
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(26, 54, 93, 0.1);
+        }
+
+        .timesheet-grid .weekend {
+            background: #f7fafc;
+        }
+
+        .timesheet-grid .total-cell {
+            font-weight: 600;
+            background: #edf2f7;
+        }
+
+        /* Alerts */
+        .alert {
+            border-radius: 0.5rem;
+            border: none;
+        }
+
+        /* Responsive */
+        @media (max-width: 991.98px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+
+            .sidebar.show {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+
+            .mobile-nav-toggle {
+                display: block !important;
+            }
+        }
+
+        .mobile-nav-toggle {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 1001;
+            background: var(--tkg-primary);
+            color: white;
+            border: none;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.5rem;
+        }
+
+        /* Smooth transitions for HTMX */
+        .htmx-settling {
+            opacity: 0.8;
+        }
+        .htmx-swapping {
+            opacity: 0.5;
+            transition: opacity 0.15s ease-out;
+        }
+
+        /* Success flash for saved inputs */
+        .bg-success-subtle {
+            transition: background-color 0.3s ease;
+        }
+    </style>
+
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    {% if user.is_authenticated %}
+    <!-- Sidebar -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <h5>TKG</h5>
+            <small>Time & Expense Portal</small>
+        </div>
+
+        <div class="sidebar-nav">
+            <div class="nav-section">Main</div>
+            <a href="{% url 'timesheets:dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard' and request.resolver_match.app_name == 'timesheets' %}active{% endif %}">
+                <i class="bi bi-house"></i> Dashboard
+            </a>
+
+            <div class="nav-section">Time</div>
+            <a href="{% url 'timesheets:timesheet_list' %}" class="nav-link {% if 'timesheet' in request.path and 'review' not in request.path %}active{% endif %}">
+                <i class="bi bi-clock"></i> My Timesheets
+            </a>
+
+            <div class="nav-section">Expenses</div>
+            <a href="{% url 'expenses:expense_list' %}" class="nav-link {% if 'expense' in request.path and 'review' not in request.path %}active{% endif %}">
+                <i class="bi bi-receipt"></i> My Expenses
+            </a>
+
+            {% if user.is_staff or user.groups.filter %}
+            {% with is_manager=user.groups.all %}
+            {% if user.is_superuser or is_manager %}
+            <div class="nav-section">Admin</div>
+            <a href="{% url 'reviews:dashboard' %}" class="nav-link {% if 'reviews' in request.path %}active{% endif %}">
+                <i class="bi bi-clipboard-check"></i> Review Submissions
+            </a>
+            <a href="{% url 'exports:export_dashboard' %}" class="nav-link {% if 'exports' in request.path %}active{% endif %}">
+                <i class="bi bi-download"></i> Export Reports
+            </a>
+            <a href="{% url 'admin:index' %}" class="nav-link">
+                <i class="bi bi-gear"></i> Admin Panel
+            </a>
+            {% endif %}
+            {% endwith %}
+            {% endif %}
+        </div>
+
+        <div class="sidebar-footer">
+            <div class="user-name">{{ user.get_full_name|default:user.email }}</div>
+            <div class="user-email">{{ user.email }}</div>
+            <a href="{% url 'account_logout' %}" class="btn btn-sm btn-outline-light mt-2 w-100">
+                <i class="bi bi-box-arrow-right"></i> Sign Out
+            </a>
+        </div>
+    </nav>
+
+    <button class="mobile-nav-toggle" onclick="document.getElementById('sidebar').classList.toggle('show')">
+        <i class="bi bi-list"></i>
+    </button>
+    {% endif %}
+
+    <!-- Main content -->
+    <main class="{% if user.is_authenticated %}main-content{% else %}container py-5{% endif %}">
+        {% if messages %}
+        <div class="messages mb-4">
+            {% for message in messages %}
+            <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,99 @@
+services:
+  nginx:
+    build:
+      context: ./docker/nginx
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - static_files:/app/staticfiles:ro
+      - media_files:/app/media:ro
+      - certbot_conf:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+    depends_on:
+      - web
+    restart: always
+
+  certbot:
+    image: certbot/certbot:latest
+    volumes:
+      - certbot_conf:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: gunicorn tkg_te.wsgi:application --bind 0.0.0.0:8000 --workers 3 --threads 2 --timeout 120
+    env_file: .env.prod
+    volumes:
+      - static_files:/app/staticfiles
+      - media_files:/app/media
+      - export_files:/app/exports
+    expose:
+      - "8000"
+    depends_on:
+      - db
+      - redis
+    restart: always
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tkg_te}
+      POSTGRES_USER: ${POSTGRES_USER:-tkg_te}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: always
+    # Don't expose DB to outside in production
+    # ports:
+    #   - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    restart: always
+    # Don't expose Redis to outside in production
+    # ports:
+    #   - "6379:6379"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A tkg_te worker -l INFO --concurrency=2
+    env_file: .env.prod
+    volumes:
+      - media_files:/app/media
+      - export_files:/app/exports
+    depends_on:
+      - db
+      - redis
+    restart: always
+
+  beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A tkg_te beat -l INFO
+    env_file: .env.prod
+    volumes:
+      - media_files:/app/media
+      - export_files:/app/exports
+    depends_on:
+      - db
+      - redis
+    restart: always
+
+volumes:
+  pgdata:
+  redis_data:
+  static_files:
+  media_files:
+  export_files:
+  certbot_conf:
+  certbot_www:

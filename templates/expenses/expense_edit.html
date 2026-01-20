@@ -1,0 +1,379 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Expenses - {{ report.month.display_name }} - TKG T&E{% endblock %}
+
+{% block extra_css %}
+<style>
+    .dropzone {
+        border: 2px dashed var(--tkg-border);
+        border-radius: 0.5rem;
+        padding: 2rem;
+        text-align: center;
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+    .dropzone:hover, .dropzone.dragover {
+        border-color: var(--tkg-primary);
+        background: rgba(26, 54, 93, 0.05);
+    }
+    .dropzone.dragover {
+        transform: scale(1.02);
+    }
+    .receipt-thumb {
+        width: 60px;
+        height: 60px;
+        object-fit: cover;
+        border-radius: 0.25rem;
+        border: 1px solid var(--tkg-border);
+    }
+    .receipt-file {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem;
+        background: #f8f9fa;
+        border-radius: 0.25rem;
+        margin-bottom: 0.25rem;
+    }
+    .expense-item-card {
+        border-left: 3px solid var(--tkg-primary);
+    }
+    .expense-item-card.needs-receipt {
+        border-left-color: var(--tkg-warning);
+    }
+    .expense-item-card.receipt-ok {
+        border-left-color: var(--tkg-success);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-start">
+    <div>
+        <h1>Edit Expense Report</h1>
+        <p class="text-muted mb-0">{{ report.month.display_name }} · Due {{ report.month.due_date|date:"M j, Y" }}</p>
+    </div>
+    <div class="text-end">
+        <span class="badge-status badge-{{ report.status|lower }}">{{ report.get_status_display }}</span>
+        <div class="h4 mb-0 mt-2" style="font-family: var(--font-mono);">
+            $<span id="grand-total">{{ report.grand_total|floatformat:2 }}</span>
+        </div>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <div class="text-muted small">Expenses</div>
+                <div class="h3 mb-0" style="font-family: var(--font-mono);">$<span id="total-expenses">{{ report.total_expenses|floatformat:2 }}</span></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <div class="text-muted small">Mileage</div>
+                <div class="h3 mb-0" style="font-family: var(--font-mono);">$<span id="total-mileage">{{ report.total_mileage_amount|floatformat:2 }}</span></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 bg-primary text-white">
+            <div class="card-body text-center">
+                <div class="small opacity-75">Grand Total</div>
+                <div class="h3 mb-0" style="font-family: var(--font-mono);">$<span id="grand-total-card">{{ report.grand_total|floatformat:2 }}</span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Expense Items Section -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-receipt me-2"></i>Expense Items</span>
+        <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addExpenseModal">
+            <i class="bi bi-plus-circle me-1"></i>Add Expense
+        </button>
+    </div>
+    <div class="card-body" id="expense-items-container">
+        {% for item in items %}
+        {% include "expenses/partials/expense_item_row.html" with item=item report=report %}
+        {% empty %}
+        <div id="no-expenses-msg" class="text-center py-4 text-muted">
+            <i class="bi bi-receipt h3 d-block mb-2"></i>
+            No expenses added yet. Click "Add Expense" to get started.
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Mileage Section -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-car-front me-2"></i>Mileage Reimbursement</span>
+        <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addMileageModal">
+            <i class="bi bi-plus-circle me-1"></i>Add Mileage
+        </button>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Description</th>
+                        <th class="text-end">Miles</th>
+                        <th class="text-end">Rate</th>
+                        <th class="text-end">Amount</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="mileage-body">
+                    {% for entry in mileage_entries %}
+                    {% include "expenses/partials/mileage_row.html" with entry=entry report=report %}
+                    {% empty %}
+                    <tr id="no-mileage-msg">
+                        <td colspan="6" class="text-center py-4 text-muted">
+                            No mileage entries yet.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Notes Section -->
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="bi bi-chat-left-text me-2"></i>Notes for Reviewer
+    </div>
+    <div class="card-body">
+        <div class="position-relative">
+            <textarea
+                class="form-control"
+                name="employee_notes"
+                rows="3"
+                placeholder="Add any notes for your reviewer (optional)..."
+                hx-post="{% url 'expenses:expense_save_notes' report.pk %}"
+                hx-trigger="change, keyup delay:1000ms changed"
+                hx-target="#notes-status"
+            >{{ report.employee_notes }}</textarea>
+            <small id="notes-status" class="position-absolute end-0 bottom-0 me-2 mb-2"></small>
+        </div>
+    </div>
+</div>
+
+{% if report.reviewer_notes %}
+<div class="alert alert-warning mb-4">
+    <h6 class="alert-heading"><i class="bi bi-exclamation-triangle me-2"></i>Reviewer Notes</h6>
+    {{ report.reviewer_notes }}
+</div>
+{% endif %}
+
+<!-- Action Buttons -->
+<div class="d-flex gap-2 flex-wrap">
+    <a href="{% url 'expenses:expense_detail' report.pk %}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-2"></i>Back
+    </a>
+    <div class="flex-grow-1"></div>
+    {% if items or mileage_entries %}
+    <form action="{% url 'expenses:expense_submit' report.pk %}" method="post" class="d-inline" id="submit-form">
+        {% csrf_token %}
+        <button type="button" class="btn btn-accent" onclick="confirmSubmit()">
+            <i class="bi bi-send me-2"></i>Submit for Review
+        </button>
+    </form>
+    {% endif %}
+</div>
+
+<!-- Add Expense Modal -->
+<div class="modal fade" id="addExpenseModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Expense</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form hx-post="{% url 'expenses:expense_add_item' report.pk %}"
+                  hx-target="#expense-items-container"
+                  hx-swap="beforeend"
+                  hx-encoding="multipart/form-data"
+                  hx-on::after-request="if(event.detail.successful) { bootstrap.Modal.getInstance(document.getElementById('addExpenseModal')).hide(); this.reset(); document.getElementById('no-expenses-msg')?.remove(); }">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Date <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control" name="date" required
+                                   min="{{ report.month.start_date|date:'Y-m-d' }}"
+                                   max="{{ report.month.end_date|date:'Y-m-d' }}"
+                                   value="{{ report.month.start_date|date:'Y-m-d' }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Category <span class="text-danger">*</span></label>
+                            <select class="form-select" name="category" required>
+                                <option value="">Select...</option>
+                                {% for cat in categories %}
+                                <option value="{{ cat.pk }}">{{ cat.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Amount <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" name="amount" step="0.01" min="0.01" required placeholder="0.00">
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Description <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="description" required placeholder="Brief description of expense">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Client/Vendor (optional)</label>
+                            <input type="text" class="form-control" name="client" placeholder="If applicable">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Receipt</label>
+                            <input type="file" class="form-control" name="receipts" accept="image/*,.pdf" multiple>
+                            <div class="form-text">Upload receipt images or PDFs</div>
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="paper_receipt_delivered" id="paperReceipt">
+                                <label class="form-check-label" for="paperReceipt">
+                                    Paper receipt delivered to office manager
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-plus-circle me-1"></i>Add Expense
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Add Mileage Modal -->
+<div class="modal fade" id="addMileageModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Mileage</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form hx-post="{% url 'expenses:expense_add_mileage' report.pk %}"
+                  hx-target="#mileage-body"
+                  hx-swap="beforeend"
+                  hx-on::after-request="if(event.detail.successful) { bootstrap.Modal.getInstance(document.getElementById('addMileageModal')).hide(); this.reset(); document.getElementById('no-mileage-msg')?.remove(); }">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Date <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" name="date" required
+                               min="{{ report.month.start_date|date:'Y-m-d' }}"
+                               max="{{ report.month.end_date|date:'Y-m-d' }}"
+                               value="{{ report.month.start_date|date:'Y-m-d' }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Miles <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" name="miles" step="0.1" min="0.1" required placeholder="0.0">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="description" required placeholder="Purpose and route (e.g., Client meeting: Office → ABC Corp → Office)">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-plus-circle me-1"></i>Add Mileage
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+<script>
+// HTMX CSRF
+document.body.addEventListener('htmx:configRequest', function(evt) {
+    evt.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
+});
+
+// Update totals when items change
+document.body.addEventListener('updateTotals', function() {
+    fetch('{% url "expenses:expense_totals" report.pk %}')
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('total-expenses').textContent = parseFloat(data.total_expenses).toFixed(2);
+            document.getElementById('total-mileage').textContent = parseFloat(data.total_mileage).toFixed(2);
+            document.getElementById('grand-total').textContent = parseFloat(data.grand_total).toFixed(2);
+            document.getElementById('grand-total-card').textContent = parseFloat(data.grand_total).toFixed(2);
+        });
+});
+
+function deleteItem(itemId) {
+    if (!confirm('Delete this expense?')) return;
+    fetch(`/expense/{{ report.pk }}/delete-item/${itemId}/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+    }).then(r => {
+        if (r.ok) {
+            document.getElementById(`expense-item-${itemId}`).remove();
+            document.body.dispatchEvent(new Event('updateTotals'));
+        }
+    });
+}
+
+function deleteMileage(entryId) {
+    if (!confirm('Delete this mileage entry?')) return;
+    fetch(`/expense/{{ report.pk }}/delete-mileage/${entryId}/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+    }).then(r => {
+        if (r.ok) {
+            document.getElementById(`mileage-row-${entryId}`).remove();
+            document.body.dispatchEvent(new Event('updateTotals'));
+        }
+    });
+}
+
+function confirmSubmit() {
+    const total = document.getElementById('grand-total').textContent;
+    if (confirm(`Submit expense report for $${total}?\n\nYou won't be able to edit it after submission.`)) {
+        document.getElementById('submit-form').submit();
+    }
+}
+
+// Drag and drop for receipt upload
+document.querySelectorAll('.dropzone').forEach(zone => {
+    zone.addEventListener('dragover', e => {
+        e.preventDefault();
+        zone.classList.add('dragover');
+    });
+    zone.addEventListener('dragleave', e => {
+        zone.classList.remove('dragover');
+    });
+    zone.addEventListener('drop', e => {
+        e.preventDefault();
+        zone.classList.remove('dragover');
+        const input = zone.querySelector('input[type="file"]');
+        input.files = e.dataTransfer.files;
+        input.dispatchEvent(new Event('change'));
+    });
+});
+</script>
+{% endblock %}
