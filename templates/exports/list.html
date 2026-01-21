@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block title %}All Exports - TKG T&E{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-start">
+    <div>
+        <h1>All Exports</h1>
+        <p class="text-muted mb-0">Browse and download generated export files</p>
+    </div>
+    <a href="{% url 'exports:export_dashboard' %}" class="btn btn-primary">
+        <i class="bi bi-plus-circle me-2"></i>Generate New
+    </a>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Year</label>
+                <select name="year" class="form-select">
+                    <option value="">All Years</option>
+                    {% for y in years %}
+                    <option value="{{ y }}" {% if request.GET.year == y|stringformat:"d" %}selected{% endif %}>{{ y }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Month</label>
+                <select name="month" class="form-select">
+                    <option value="">All Months</option>
+                    {% for m in "123456789101112"|make_list %}
+                    <option value="{{ forloop.counter }}" {% if request.GET.month == forloop.counter|stringformat:"d" %}selected{% endif %}>{{ forloop.counter }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Type</label>
+                <select name="type" class="form-select">
+                    <option value="">All Types</option>
+                    {% for value, label in export_types %}
+                    <option value="{{ value }}" {% if request.GET.type == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-outline-primary w-100">
+                    <i class="bi bi-funnel me-2"></i>Filter
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Period</th>
+                        <th>Employee</th>
+                        <th>Filename</th>
+                        <th>Status</th>
+                        <th>Created By</th>
+                        <th>Created</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for export in exports %}
+                    <tr>
+                        <td>{{ export.get_export_type_display }}</td>
+                        <td>{{ export.year }}-{{ export.month|stringformat:"02d" }}{% if export.half %} ({{ export.half }}){% endif %}</td>
+                        <td>{{ export.employee.get_full_name|default:"-" }}</td>
+                        <td><small class="text-muted">{{ export.filename|default:"-" }}</small></td>
+                        <td>
+                            <span class="badge bg-{% if export.status == 'COMPLETED' %}success{% elif export.status == 'FAILED' %}danger{% else %}secondary{% endif %}">
+                                {{ export.get_status_display }}
+                            </span>
+                        </td>
+                        <td>{{ export.created_by.get_short_name|default:"-" }}</td>
+                        <td>{{ export.created_at|date:"M j, Y g:i A" }}</td>
+                        <td class="text-end">
+                            {% if export.file %}
+                            <a href="{% url 'exports:download' export.pk %}" class="btn btn-sm btn-outline-primary" title="Download">
+                                <i class="bi bi-download"></i>
+                            </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center py-4 text-muted">No exports found.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

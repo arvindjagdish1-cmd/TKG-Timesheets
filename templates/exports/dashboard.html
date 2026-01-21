@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}Export Dashboard - TKG T&E{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Export Dashboard</h1>
+    <p class="text-muted mb-0">Generate XLSX and PDF exports for timesheets and expenses</p>
+</div>
+
+<div class="row g-4">
+    <!-- Timesheet Exports -->
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <i class="bi bi-clock me-2"></i>Timesheet Exports
+            </div>
+            <div class="card-body">
+                <form action="{% url 'exports:generate_timesheets' %}" method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">Select Period</label>
+                        <select name="period_id" class="form-select" required>
+                            {% for period in recent_ts_periods %}
+                            <option value="{{ period.pk }}">{{ period.display_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Export Format</label>
+                        <select name="export_type" class="form-select">
+                            <option value="xlsx">Excel Only (.xlsx)</option>
+                            <option value="pdf">Excel + PDF</option>
+                            <option value="pack">Excel + PDF + Combined PDF Pack</option>
+                            <option value="all">All Formats</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-download me-2"></i>Generate Timesheet Exports
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Expense Exports -->
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <i class="bi bi-receipt me-2"></i>Expense Exports
+            </div>
+            <div class="card-body">
+                <form action="{% url 'exports:generate_expenses' %}" method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">Select Month</label>
+                        <select name="month_id" class="form-select" required>
+                            {% for month in recent_expense_months %}
+                            <option value="{{ month.pk }}">{{ month.display_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Export Format</label>
+                        <select name="export_type" class="form-select">
+                            <option value="xlsx">Excel Only (.xlsx)</option>
+                            <option value="pdf">Excel + PDF</option>
+                            <option value="pack">Excel + PDF + Combined PDF Pack</option>
+                            <option value="all">All Formats</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Sort Order</label>
+                        <select name="sort_by" class="form-select">
+                            <option value="seniority">By Seniority</option>
+                            <option value="alpha">Alphabetical</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-success w-100">
+                        <i class="bi bi-download me-2"></i>Generate Expense Exports
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Exports -->
+<div class="card mt-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-clock-history me-2"></i>Recent Exports</span>
+        <a href="{% url 'exports:export_list' %}" class="btn btn-sm btn-outline-secondary">View All</a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Period</th>
+                        <th>Employee</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for export in recent_exports %}
+                    <tr>
+                        <td>
+                            {% if "TS" in export.export_type %}
+                            <i class="bi bi-clock text-primary me-1"></i>
+                            {% else %}
+                            <i class="bi bi-receipt text-success me-1"></i>
+                            {% endif %}
+                            {{ export.get_export_type_display }}
+                        </td>
+                        <td>{{ export.year }}-{{ export.month|stringformat:"02d" }}{% if export.half %} ({{ export.half }}){% endif %}</td>
+                        <td>{{ export.employee.get_full_name|default:"All" }}</td>
+                        <td>
+                            {% if export.status == "COMPLETED" %}
+                            <span class="badge bg-success">{{ export.get_status_display }}</span>
+                            {% elif export.status == "FAILED" %}
+                            <span class="badge bg-danger">{{ export.get_status_display }}</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ export.get_status_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ export.created_at|date:"M j, g:i A" }}</td>
+                        <td class="text-end">
+                            {% if export.file %}
+                            <a href="{% url 'exports:download' export.pk %}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-download"></i>
+                            </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-4 text-muted">No exports generated yet.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
