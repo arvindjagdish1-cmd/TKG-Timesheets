@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+{% load timesheet_tags %}
+
+{% block title %}Daily Summary - {{ period.display_name }} - Keystone{% endblock %}
+
+{% block extra_css %}
+<style>
+    .summary-table {
+        font-size: 0.8125rem;
+    }
+    .summary-table th {
+        font-size: 0.6875rem;
+        white-space: nowrap;
+    }
+    .summary-table td {
+        text-align: center;
+        padding: 0.5rem 0.375rem;
+        font-family: var(--font-mono);
+    }
+    .summary-table .employee-cell {
+        text-align: left;
+        font-family: 'Inter', sans-serif;
+        font-weight: 500;
+        white-space: nowrap;
+        position: sticky;
+        left: 0;
+        background: var(--ks-bg-card);
+        z-index: 1;
+    }
+    .summary-table th.employee-header {
+        position: sticky;
+        left: 0;
+        z-index: 2;
+        background: var(--ks-bg-secondary);
+    }
+    .day-header {
+        min-width: 50px;
+    }
+    .day-header .day-name {
+        font-size: 0.625rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--ks-text-muted);
+    }
+    .day-header .day-num {
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+    .weekend {
+        background: var(--ks-bg-secondary) !important;
+    }
+    .incomplete {
+        background: var(--ks-warning-subtle) !important;
+        color: var(--ks-warning) !important;
+    }
+    .missing-ts {
+        background: var(--ks-danger-subtle) !important;
+        color: var(--ks-danger) !important;
+    }
+    .excessive-hours {
+        background: var(--ks-danger-subtle) !important;
+        color: var(--ks-danger) !important;
+    }
+    .total-cell {
+        font-weight: 600;
+        background: var(--ks-bg-tertiary);
+    }
+    .has-flag {
+        position: relative;
+    }
+    .has-flag::after {
+        content: '';
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        width: 6px;
+        height: 6px;
+        background: var(--ks-danger);
+        border-radius: 50%;
+    }
+    .flag-legend {
+        display: flex;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+        font-size: 0.8125rem;
+    }
+    .flag-legend-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .flag-legend-item .flag-color {
+        width: 16px;
+        height: 16px;
+        border-radius: 4px;
+    }
+    .scroll-hint {
+        color: var(--ks-text-muted);
+        font-size: 0.75rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'reviews:partner_dashboard' %}">Partner Dashboard</a></li>
+                <li class="breadcrumb-item active">Daily Summary</li>
+            </ol>
+        </nav>
+        <h1>Daily Hours Summary</h1>
+        <p class="text-muted mb-0">{{ period.display_name }}</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'reviews:category_summary_period' period.pk %}" class="btn btn-secondary">
+            <i class="bi bi-grid-3x3 me-2"></i>Category View
+        </a>
+    </div>
+</div>
+
+<!-- Period Selector & Legend -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-md-4">
+                <form method="get" action="{% url 'reviews:daily_summary' %}">
+                    <div class="d-flex gap-2">
+                        <select name="period" class="form-select form-select-sm" style="max-width: 250px;">
+                            {% for p in recent_periods %}
+                            <option value="{{ p.pk }}" {% if p.pk == period.pk %}selected{% endif %}>
+                                {{ p.display_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit" class="btn btn-sm btn-primary">
+                            <i class="bi bi-arrow-right"></i>
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <div class="col-md-8">
+                <div class="flag-legend justify-content-end">
+                    <div class="flag-legend-item">
+                        <div class="flag-color" style="background: var(--ks-warning-subtle); border: 1px solid var(--ks-warning);"></div>
+                        <span>Incomplete (&lt;8 hrs)</span>
+                    </div>
+                    <div class="flag-legend-item">
+                        <div class="flag-color" style="background: var(--ks-danger-subtle); border: 1px solid var(--ks-danger);"></div>
+                        <span>Missing Timesheet</span>
+                    </div>
+                    <div class="flag-legend-item">
+                        <div class="flag-color" style="background: var(--ks-bg-secondary); border: 1px solid var(--ks-border);"></div>
+                        <span>Weekend</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Summary Table -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-table me-2"></i>Hours by Day</span>
+        <span class="scroll-hint"><i class="bi bi-arrows-expand me-1"></i>Scroll horizontally to see all days</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table summary-table mb-0">
+                <thead>
+                    <tr>
+                        <th class="employee-header" style="min-width: 180px;">Employee</th>
+                        {% for date in dates %}
+                        <th class="day-header {% if date.weekday >= 5 %}weekend{% endif %}">
+                            <div class="day-name">{{ date|date:"D" }}</div>
+                            <div class="day-num">{{ date|date:"j" }}</div>
+                        </th>
+                        {% endfor %}
+                        <th class="total-cell">Total</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for data in employee_data %}
+                    <tr class="{% if data.has_flags %}has-flag{% endif %}">
+                        <td class="employee-cell {% if data.missing %}missing-ts{% endif %}">
+                            {{ data.employee.get_full_name|default:data.employee.email }}
+                            {% if data.missing %}
+                            <i class="bi bi-exclamation-circle ms-1" title="Missing timesheet"></i>
+                            {% endif %}
+                        </td>
+                        {% for date in dates %}
+                        {% with hours=data.daily_hours|get_item:date %}
+                        <td class="{% if date.weekday >= 5 %}weekend{% elif data.missing %}missing-ts{% elif date.weekday < 5 and hours < 8 and hours > 0 %}incomplete{% elif date.weekday < 5 and hours == 0 %}incomplete{% endif %}">
+                            {% if hours > 0 %}{{ hours|floatformat:1 }}{% else %}-{% endif %}
+                        </td>
+                        {% endwith %}
+                        {% endfor %}
+                        <td class="total-cell">{{ data.total_hours|floatformat:1 }}</td>
+                        <td>
+                            {% if data.missing %}
+                            <span class="badge-status badge-returned">Missing</span>
+                            {% elif data.has_flags %}
+                            <span class="badge-status badge-submitted" title="{{ data.flags.incomplete_days|length }} incomplete days">
+                                <i class="bi bi-flag"></i> {{ data.flags.incomplete_days|length }} flags
+                            </span>
+                            {% else %}
+                            <span class="badge-status badge-approved">OK</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="{{ dates|length|add:3 }}" class="text-center py-4 text-muted">
+                            No employees found.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Flag Details -->
+{% for data in employee_data %}
+{% if data.has_flags and not data.missing %}
+<div class="card mt-3">
+    <div class="card-header">
+        <i class="bi bi-flag text-warning me-2"></i>{{ data.employee.get_full_name }}: Flag Details
+    </div>
+    <div class="card-body">
+        {% if data.flags.incomplete_days %}
+        <div class="mb-3">
+            <strong class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Incomplete Days:</strong>
+            <span class="text-muted ms-2">
+                {% for flag in data.flags.incomplete_days %}
+                {{ flag.date|date:"M j" }} ({{ flag.hours|floatformat:1 }}h){% if not forloop.last %}, {% endif %}
+                {% endfor %}
+            </span>
+        </div>
+        {% endif %}
+        
+        {% if data.flags.excessive_hours_weeks %}
+        <div>
+            <strong class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Excessive Hours Weeks:</strong>
+            {% for flag in data.flags.excessive_hours_weeks %}
+            <div class="text-muted ms-4 mt-1">
+                Week {{ flag.week.1 }}: {{ flag.count }} days with >10 hours
+                ({% for d in flag.dates %}{{ d|date:"M j" }}{% if not forloop.last %}, {% endif %}{% endfor %})
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endfor %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Custom template filter workaround - dictionary lookup
+// This won't work directly, need to handle in Python view
+</script>
+{% endblock %}

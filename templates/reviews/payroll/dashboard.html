@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}Payroll Export - Keystone Time & Expense{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Payroll Export</h1>
+        <p class="text-muted mb-0">Export expense data for payroll processing</p>
+    </div>
+</div>
+
+<!-- Month Selector -->
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="bi bi-calendar-month me-2"></i>Select Expense Month
+    </div>
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-6">
+                <label class="form-label">Expense Month</label>
+                <select name="month" class="form-select" onchange="this.form.submit()">
+                    <option value="">-- Select Month --</option>
+                    {% for month in recent_months %}
+                    <option value="{{ month.pk }}" {% if selected_month.pk == month.pk %}selected{% endif %}>
+                        {{ month.display_name }}
+                        {% if month.pk == current_month.pk %}(Current){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% if selected_month %}
+            <div class="col-md-6">
+                <div class="d-flex gap-2">
+                    <a href="{% url 'reviews:payroll_export' selected_month.pk %}?format=xlsx" class="btn btn-success">
+                        <i class="bi bi-file-earmark-excel me-2"></i>Download Excel
+                    </a>
+                    <a href="{% url 'reviews:payroll_export' selected_month.pk %}?format=csv" class="btn btn-secondary">
+                        <i class="bi bi-filetype-csv me-2"></i>Download CSV
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+        </form>
+    </div>
+</div>
+
+{% if selected_month %}
+<!-- Expense Summary -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-cash-stack me-2"></i>Expense Summary - {{ selected_month.display_name }}</span>
+        <span class="text-muted small">{{ expense_summary|length }} employees</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table mb-0">
+                <thead>
+                    <tr>
+                        <th>Employee</th>
+                        <th class="text-end">Total Expenses</th>
+                        <th class="text-center">Status</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in expense_summary %}
+                    <tr>
+                        <td>
+                            <div class="fw-medium">{{ item.employee.get_full_name|default:item.employee.email }}</div>
+                            <small class="text-muted">{{ item.employee.email }}</small>
+                        </td>
+                        <td class="text-end" style="font-family: var(--font-mono);">
+                            ${{ item.total|floatformat:2 }}
+                        </td>
+                        <td class="text-center">
+                            {% if item.status == "MISSING" %}
+                            <span class="badge-status badge-returned">No Report</span>
+                            {% elif item.status == "DRAFT" %}
+                            <span class="badge-status badge-draft">Draft</span>
+                            {% elif item.status == "SUBMITTED" %}
+                            <span class="badge-status badge-submitted">Submitted</span>
+                            {% elif item.status == "APPROVED" %}
+                            <span class="badge-status badge-approved">Approved</span>
+                            {% elif item.status == "RETURNED" %}
+                            <span class="badge-status badge-returned">Returned</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if item.report %}
+                            <a href="{% url 'reviews:review_expense' item.report.pk %}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="text-center py-4 text-muted">
+                            No employees found.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr style="background: var(--ks-bg-tertiary);">
+                        <td class="fw-bold">Total</td>
+                        <td class="text-end fw-bold" style="font-family: var(--font-mono);">
+                            {% widthratio 0 1 1 as total %}
+                            ${% for item in expense_summary %}{% with total=item.total|add:total %}{% endwith %}{% endfor %}
+                            {% with grand=0 %}
+                            {% for item in expense_summary %}
+                            {% endfor %}
+                            {% endwith %}
+                            {{ expense_summary|length }} reports
+                        </td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Export Info -->
+<div class="card mt-4">
+    <div class="card-header">
+        <i class="bi bi-info-circle me-2"></i>Export Information
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <h6 class="text-muted mb-2">Excel Export</h6>
+                <p class="small text-muted">
+                    The Excel export includes all expense categories as rows and employees as columns.
+                    This matches the format needed for Paychex upload. Categories include:
+                </p>
+                <ul class="small text-muted">
+                    <li>All expense categories (meals, travel, office supplies, etc.)</li>
+                    <li>Mileage reimbursements (separate row)</li>
+                    <li>Grand total per employee</li>
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <h6 class="text-muted mb-2">CSV Export</h6>
+                <p class="small text-muted">
+                    The CSV export provides the same data in comma-separated format
+                    for use in other systems or spreadsheet applications.
+                </p>
+                <div class="alert alert-info small mt-3">
+                    <i class="bi bi-lightbulb me-2"></i>
+                    <strong>Tip:</strong> Use the Excel format for direct import into Paychex.
+                    The CSV format is useful for custom processing or backup.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-calendar-month h1 text-muted d-block mb-3"></i>
+        <h5>Select a Month</h5>
+        <p class="text-muted">Please select an expense month above to view summary and export options.</p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

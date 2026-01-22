@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}No Active Period - Keystone{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>No Active Period</h1>
+</div>
+
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-calendar-x h1 text-muted d-block mb-3"></i>
+        <h5>No Timesheet Period Available</h5>
+        <p class="text-muted mb-4">
+            There is no active timesheet period configured in the system.
+            Please contact an administrator to set up timesheet periods.
+        </p>
+        <a href="{% url 'reviews:partner_dashboard' %}" class="btn btn-primary">
+            <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+        </a>
+    </div>
+</div>
+{% endblock %}

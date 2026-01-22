@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}Partner Dashboard - Keystone Time & Expense{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Partner Dashboard</h1>
+        <p class="text-muted mb-0">Timesheet and expense overview for management</p>
+    </div>
+    {% if selected_period %}
+    <div class="d-flex gap-2">
+        <a href="{% url 'reviews:daily_summary_period' selected_period.pk %}" class="btn btn-primary">
+            <i class="bi bi-calendar3 me-2"></i>Daily Summary
+        </a>
+        <a href="{% url 'reviews:category_summary_period' selected_period.pk %}" class="btn btn-secondary">
+            <i class="bi bi-grid-3x3 me-2"></i>Category Summary
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Period Selector -->
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="bi bi-calendar-week me-2"></i>Select Period
+    </div>
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-6">
+                <label class="form-label">Timesheet Period</label>
+                <select name="period" class="form-select" onchange="this.form.submit()">
+                    <option value="">-- Select Period --</option>
+                    {% for period in recent_periods %}
+                    <option value="{{ period.pk }}" {% if selected_period.pk == period.pk %}selected{% endif %}>
+                        {{ period.display_name }}
+                        {% if period.pk == current_period.pk %}(Current){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if selected_period %}
+<!-- Quick Stats -->
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="stat-icon" style="background: var(--ks-accent-subtle); color: var(--ks-accent);">
+                <i class="bi bi-calendar-range"></i>
+            </div>
+            <div class="stat-value">{{ selected_period.display_name }}</div>
+            <div class="stat-label">Selected Period</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="stat-icon" style="background: var(--ks-success-subtle); color: var(--ks-success);">
+                <i class="bi bi-calendar-check"></i>
+            </div>
+            <div class="stat-value">{{ selected_period.start_date|date:"M j" }} - {{ selected_period.end_date|date:"M j" }}</div>
+            <div class="stat-label">Date Range</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="stat-icon" style="background: var(--ks-warning-subtle); color: var(--ks-warning);">
+                <i class="bi bi-clock"></i>
+            </div>
+            <div class="stat-value">{{ selected_period.due_date|date:"M j, Y" }}</div>
+            <div class="stat-label">Due Date</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="stat-icon {% if selected_period.is_locked %}{% else %}{% endif %}" style="background: {% if selected_period.is_locked %}var(--ks-danger-subtle){% else %}var(--ks-success-subtle){% endif %}; color: {% if selected_period.is_locked %}var(--ks-danger){% else %}var(--ks-success){% endif %};">
+                <i class="bi bi-{% if selected_period.is_locked %}lock{% else %}unlock{% endif %}"></i>
+            </div>
+            <div class="stat-value">{% if selected_period.is_locked %}Locked{% else %}Open{% endif %}</div>
+            <div class="stat-label">Period Status</div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Links -->
+<div class="row g-4">
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <i class="bi bi-calendar3 me-2"></i>Daily Hours Summary
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3">
+                    View hours logged by day for each employee, with flags for incomplete days and excessive hours.
+                </p>
+                <ul class="list-unstyled text-muted small mb-4">
+                    <li class="mb-1"><i class="bi bi-exclamation-triangle text-warning me-2"></i>Flags days with less than 8 hours</li>
+                    <li class="mb-1"><i class="bi bi-exclamation-triangle text-danger me-2"></i>Flags weeks with >10hrs/day for >2 days</li>
+                    <li><i class="bi bi-x-circle text-danger me-2"></i>Highlights missing timesheets</li>
+                </ul>
+                <a href="{% url 'reviews:daily_summary_period' selected_period.pk %}" class="btn btn-primary">
+                    <i class="bi bi-arrow-right me-2"></i>View Daily Summary
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <i class="bi bi-grid-3x3 me-2"></i>Category Summary
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3">
+                    View hours by category (charge code) with employees across the top and categories down the side.
+                </p>
+                <ul class="list-unstyled text-muted small mb-4">
+                    <li class="mb-1"><i class="bi bi-briefcase text-primary me-2"></i>Client work shown first</li>
+                    <li class="mb-1"><i class="bi bi-tags text-success me-2"></i>Other categories follow</li>
+                    <li><i class="bi bi-calculator text-info me-2"></i>Totals by employee and category</li>
+                </ul>
+                <a href="{% url 'reviews:category_summary_period' selected_period.pk %}" class="btn btn-secondary">
+                    <i class="bi bi-arrow-right me-2"></i>View Category Summary
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-calendar-x h1 text-muted d-block mb-3"></i>
+        <h5>No Period Selected</h5>
+        <p class="text-muted">Please select a timesheet period above to view summary data.</p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

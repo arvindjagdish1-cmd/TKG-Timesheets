@@ -683,11 +683,17 @@
             {% with is_manager=user.groups.all %}
             {% if user.is_superuser or is_manager %}
             <div class="nav-section">Admin</div>
-            <a href="{% url 'reviews:dashboard' %}" class="nav-link {% if 'reviews' in request.path %}active{% endif %}">
+            <a href="{% url 'reviews:dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard' and 'reviews' in request.path %}active{% endif %}">
                 <i class="bi bi-clipboard2-check"></i> Review Submissions
             </a>
             <a href="{% url 'exports:export_dashboard' %}" class="nav-link {% if 'exports' in request.path %}active{% endif %}">
                 <i class="bi bi-file-earmark-arrow-down"></i> Export Reports
+            </a>
+            <a href="{% url 'reviews:partner_dashboard' %}" class="nav-link {% if 'partner' in request.path %}active{% endif %}">
+                <i class="bi bi-person-workspace"></i> Partner Summary
+            </a>
+            <a href="{% url 'reviews:payroll_dashboard' %}" class="nav-link {% if 'payroll' in request.path %}active{% endif %}">
+                <i class="bi bi-cash-coin"></i> Payroll Export
             </a>
             <a href="{% url 'admin:index' %}" class="nav-link">
                 <i class="bi bi-sliders"></i> Admin Panel
