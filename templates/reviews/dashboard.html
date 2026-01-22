@@ -1,18 +1,77 @@
 {% extends "base.html" %}
 
-{% block title %}Review Dashboard - TKG T&E{% endblock %}
+{% block title %}Review Dashboard - Keystone{% endblock %}
+
+{% block extra_css %}
+<style>
+    .review-stat {
+        background: var(--ks-bg-card);
+        border: 1px solid var(--ks-border);
+        border-radius: var(--radius);
+        padding: 1.25rem;
+        transition: all 0.2s ease;
+    }
+    .review-stat:hover {
+        border-color: var(--ks-border-light);
+        transform: translateY(-2px);
+    }
+    .review-stat.has-pending {
+        border-color: var(--ks-warning);
+        background: linear-gradient(135deg, var(--ks-bg-card) 0%, var(--ks-warning-subtle) 100%);
+    }
+    .review-stat-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: var(--radius-sm);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+    }
+    .review-stat-value {
+        font-size: 1.75rem;
+        font-weight: 700;
+        font-family: var(--font-mono);
+        line-height: 1;
+    }
+    .review-stat-label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--ks-text-muted);
+        margin-top: 0.25rem;
+    }
+    .status-table thead {
+        position: sticky;
+        top: 0;
+        background: var(--ks-bg-secondary);
+        z-index: 1;
+    }
+    .status-scroll {
+        max-height: 380px;
+        overflow-y: auto;
+    }
+    .employee-name {
+        font-weight: 500;
+    }
+    .badge-missing {
+        background: var(--ks-bg-tertiary);
+        color: var(--ks-text-muted);
+    }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-start">
     <div>
-        <h1>Review Dashboard</h1>
+        <h1><i class="bi bi-clipboard2-check me-2" style="opacity: 0.7;"></i>Review Dashboard</h1>
         <p class="text-muted mb-0">Manage timesheet and expense submissions</p>
     </div>
     <div class="d-flex gap-2">
         {% if pending_timesheets or pending_expenses %}
-        <a href="{% url 'reviews:pending' %}" class="btn btn-accent">
-            <i class="bi bi-inbox me-2"></i>Pending Reviews
-            <span class="badge bg-light text-dark ms-1">{{ pending_timesheets|add:pending_expenses }}</span>
+        <a href="{% url 'reviews:pending' %}" class="btn btn-warning">
+            <i class="bi bi-inbox-fill me-2"></i>Pending Reviews
+            <span class="badge bg-dark ms-1">{{ pending_timesheets|add:pending_expenses }}</span>
         </a>
         {% endif %}
     </div>
@@ -21,69 +80,53 @@
 <!-- Summary Cards -->
 <div class="row g-3 mb-4">
     <div class="col-md-3">
-        <div class="card h-100 {% if pending_timesheets %}border-warning{% endif %}">
-            <div class="card-body">
-                <div class="d-flex align-items-center">
-                    <div class="flex-shrink-0">
-                        <div class="bg-primary bg-opacity-10 rounded p-3">
-                            <i class="bi bi-clock h4 text-primary mb-0"></i>
-                        </div>
-                    </div>
-                    <div class="ms-3">
-                        <h3 class="mb-0">{{ pending_timesheets }}</h3>
-                        <small class="text-muted">Pending Timesheets</small>
-                    </div>
+        <div class="review-stat {% if pending_timesheets %}has-pending{% endif %}">
+            <div class="d-flex align-items-center gap-3">
+                <div class="review-stat-icon" style="background: var(--ks-accent-subtle); color: var(--ks-accent);">
+                    <i class="bi bi-clock"></i>
+                </div>
+                <div>
+                    <div class="review-stat-value">{{ pending_timesheets }}</div>
+                    <div class="review-stat-label">Pending Timesheets</div>
                 </div>
             </div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card h-100 {% if pending_expenses %}border-warning{% endif %}">
-            <div class="card-body">
-                <div class="d-flex align-items-center">
-                    <div class="flex-shrink-0">
-                        <div class="bg-success bg-opacity-10 rounded p-3">
-                            <i class="bi bi-receipt h4 text-success mb-0"></i>
-                        </div>
-                    </div>
-                    <div class="ms-3">
-                        <h3 class="mb-0">{{ pending_expenses }}</h3>
-                        <small class="text-muted">Pending Expenses</small>
-                    </div>
+        <div class="review-stat {% if pending_expenses %}has-pending{% endif %}">
+            <div class="d-flex align-items-center gap-3">
+                <div class="review-stat-icon" style="background: var(--ks-success-subtle); color: var(--ks-success);">
+                    <i class="bi bi-receipt"></i>
+                </div>
+                <div>
+                    <div class="review-stat-value">{{ pending_expenses }}</div>
+                    <div class="review-stat-label">Pending Expenses</div>
                 </div>
             </div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card h-100">
-            <div class="card-body">
-                <div class="d-flex align-items-center">
-                    <div class="flex-shrink-0">
-                        <div class="bg-info bg-opacity-10 rounded p-3">
-                            <i class="bi bi-calendar-check h4 text-info mb-0"></i>
-                        </div>
-                    </div>
-                    <div class="ms-3">
-                        <small class="text-muted d-block">Current TS Period</small>
-                        <strong>{% if current_ts_period %}{{ current_ts_period.display_name }}{% else %}None{% endif %}</strong>
-                    </div>
+        <div class="review-stat">
+            <div class="d-flex align-items-center gap-3">
+                <div class="review-stat-icon" style="background: var(--ks-warning-subtle); color: var(--ks-warning);">
+                    <i class="bi bi-calendar-check"></i>
+                </div>
+                <div>
+                    <div class="review-stat-label mb-1">Current TS Period</div>
+                    <div class="fw-semibold">{% if current_ts_period %}{{ current_ts_period.display_name }}{% else %}None{% endif %}</div>
                 </div>
             </div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card h-100">
-            <div class="card-body">
-                <div class="d-flex align-items-center">
-                    <div class="flex-shrink-0">
-                        <div class="bg-secondary bg-opacity-10 rounded p-3">
-                            <i class="bi bi-calendar3 h4 text-secondary mb-0"></i>
-                        </div>
-                    </div>
-                    <div class="ms-3">
-                        <small class="text-muted d-block">Current Expense Month</small>
-                        <strong>{% if current_expense_month %}{{ current_expense_month.display_name }}{% else %}None{% endif %}</strong>
-                    </div>
+        <div class="review-stat">
+            <div class="d-flex align-items-center gap-3">
+                <div class="review-stat-icon" style="background: var(--ks-bg-tertiary); color: var(--ks-text-secondary);">
+                    <i class="bi bi-calendar3"></i>
+                </div>
+                <div>
+                    <div class="review-stat-label mb-1">Current Expense Month</div>
+                    <div class="fw-semibold">{% if current_expense_month %}{{ current_expense_month.display_name }}{% else %}None{% endif %}</div>
                 </div>
             </div>
         </div>
@@ -96,7 +139,7 @@
         <div class="card h-100">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-clock me-2"></i>Timesheet Status</span>
-                <select class="form-select form-select-sm w-auto" onchange="window.location.href='?ts_period='+this.value+'&expense_month={{ selected_expense_month.pk|default:'' }}'">
+                <select class="form-select form-select-sm w-auto" style="max-width: 180px;" onchange="window.location.href='?ts_period='+this.value+'&expense_month={{ selected_expense_month.pk|default:'' }}'">
                     {% for period in recent_ts_periods %}
                     <option value="{{ period.pk }}" {% if selected_ts_period.pk == period.pk %}selected{% endif %}>
                         {{ period.display_name }}
@@ -105,37 +148,41 @@
                 </select>
             </div>
             <div class="card-body p-0">
-                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
-                    <table class="table table-hover mb-0">
-                        <thead class="sticky-top bg-white">
+                <div class="status-scroll">
+                    <table class="table status-table mb-0">
+                        <thead>
                             <tr>
                                 <th>Employee</th>
                                 <th>Status</th>
                                 <th class="text-end">Hours</th>
-                                <th></th>
+                                <th class="text-end">Action</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for item in ts_status %}
                             <tr>
                                 <td>
-                                    <strong>{{ item.employee.get_full_name }}</strong>
+                                    <span class="employee-name">{{ item.employee.get_full_name|default:item.employee.email }}</span>
                                 </td>
                                 <td>
                                     {% if item.status == "MISSING" %}
-                                    <span class="badge bg-secondary">Not Started</span>
+                                    <span class="badge-status badge-missing">Not Started</span>
                                     {% else %}
                                     <span class="badge-status badge-{{ item.status|lower }}">{{ item.timesheet.get_status_display }}</span>
                                     {% endif %}
                                 </td>
-                                <td class="text-end" style="font-family: var(--font-mono);">{{ item.hours }}</td>
+                                <td class="text-end" style="font-family: var(--font-mono);">{{ item.hours|floatformat:1 }}</td>
                                 <td class="text-end">
                                     {% if item.timesheet %}
                                     {% if item.status == "SUBMITTED" %}
-                                    <a href="{% url 'reviews:review_timesheet' item.timesheet.pk %}" class="btn btn-sm btn-primary">Review</a>
+                                    <a href="{% url 'reviews:review_timesheet' item.timesheet.pk %}" class="btn btn-sm btn-primary">
+                                        <i class="bi bi-check2-circle me-1"></i>Review
+                                    </a>
                                     {% else %}
-                                    <a href="{% url 'timesheets:timesheet_detail' item.timesheet.pk %}" class="btn btn-sm btn-outline-secondary">View</a>
+                                    <a href="{% url 'timesheets:timesheet_detail' item.timesheet.pk %}" class="btn btn-sm btn-secondary">View</a>
                                     {% endif %}
+                                    {% else %}
+                                    <span class="text-muted">—</span>
                                     {% endif %}
                                 </td>
                             </tr>
@@ -156,7 +203,7 @@
         <div class="card h-100">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-receipt me-2"></i>Expense Status</span>
-                <select class="form-select form-select-sm w-auto" onchange="window.location.href='?ts_period={{ selected_ts_period.pk|default:'' }}&expense_month='+this.value">
+                <select class="form-select form-select-sm w-auto" style="max-width: 180px;" onchange="window.location.href='?ts_period={{ selected_ts_period.pk|default:'' }}&expense_month='+this.value">
                     {% for month in recent_expense_months %}
                     <option value="{{ month.pk }}" {% if selected_expense_month.pk == month.pk %}selected{% endif %}>
                         {{ month.display_name }}
@@ -165,25 +212,25 @@
                 </select>
             </div>
             <div class="card-body p-0">
-                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
-                    <table class="table table-hover mb-0">
-                        <thead class="sticky-top bg-white">
+                <div class="status-scroll">
+                    <table class="table status-table mb-0">
+                        <thead>
                             <tr>
                                 <th>Employee</th>
                                 <th>Status</th>
                                 <th class="text-end">Total</th>
-                                <th></th>
+                                <th class="text-end">Action</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for item in expense_status %}
                             <tr>
                                 <td>
-                                    <strong>{{ item.employee.get_full_name }}</strong>
+                                    <span class="employee-name">{{ item.employee.get_full_name|default:item.employee.email }}</span>
                                 </td>
                                 <td>
                                     {% if item.status == "MISSING" %}
-                                    <span class="badge bg-secondary">Not Started</span>
+                                    <span class="badge-status badge-missing">Not Started</span>
                                     {% else %}
                                     <span class="badge-status badge-{{ item.status|lower }}">{{ item.report.get_status_display }}</span>
                                     {% endif %}
@@ -192,10 +239,14 @@
                                 <td class="text-end">
                                     {% if item.report %}
                                     {% if item.status == "SUBMITTED" %}
-                                    <a href="{% url 'reviews:review_expense' item.report.pk %}" class="btn btn-sm btn-primary">Review</a>
+                                    <a href="{% url 'reviews:review_expense' item.report.pk %}" class="btn btn-sm btn-success">
+                                        <i class="bi bi-check2-circle me-1"></i>Review
+                                    </a>
                                     {% else %}
-                                    <a href="{% url 'expenses:expense_detail' item.report.pk %}" class="btn btn-sm btn-outline-secondary">View</a>
+                                    <a href="{% url 'expenses:expense_detail' item.report.pk %}" class="btn btn-sm btn-secondary">View</a>
                                     {% endif %}
+                                    {% else %}
+                                    <span class="text-muted">—</span>
                                     {% endif %}
                                 </td>
                             </tr>
@@ -215,22 +266,27 @@
 <!-- Quick Actions -->
 <div class="card mt-4">
     <div class="card-header">
-        <i class="bi bi-lightning me-2"></i>Quick Actions
+        <i class="bi bi-lightning-charge me-2"></i>Quick Actions
     </div>
     <div class="card-body">
         <div class="row g-3">
-            <div class="col-md-4">
-                <a href="{% url 'exports:export_dashboard' %}" class="btn btn-outline-primary w-100">
+            <div class="col-md-3">
+                <a href="{% url 'exports:export_dashboard' %}" class="btn btn-primary w-100">
                     <i class="bi bi-download me-2"></i>Generate Exports
                 </a>
             </div>
-            <div class="col-md-4">
-                <a href="{% url 'admin:periods_timesheetperiod_changelist' %}" class="btn btn-outline-secondary w-100">
+            <div class="col-md-3">
+                <a href="{% url 'reviews:partner_dashboard' %}" class="btn btn-secondary w-100">
+                    <i class="bi bi-person-workspace me-2"></i>Partner Summary
+                </a>
+            </div>
+            <div class="col-md-3">
+                <a href="{% url 'admin:periods_timesheetperiod_changelist' %}" class="btn btn-secondary w-100">
                     <i class="bi bi-calendar-plus me-2"></i>Manage Periods
                 </a>
             </div>
-            <div class="col-md-4">
-                <a href="{% url 'admin:accounts_user_changelist' %}" class="btn btn-outline-secondary w-100">
+            <div class="col-md-3">
+                <a href="{% url 'admin:accounts_user_changelist' %}" class="btn btn-secondary w-100">
                     <i class="bi bi-people me-2"></i>Manage Employees
                 </a>
             </div>
