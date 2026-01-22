@@ -2,16 +2,174 @@
 
 {% block title %}Dashboard - Keystone Time & Expense{% endblock %}
 
+{% block extra_css %}
+<style>
+    .welcome-section {
+        background: linear-gradient(135deg, var(--ks-bg-secondary) 0%, var(--ks-bg-tertiary) 100%);
+        border-radius: var(--radius);
+        padding: 2rem;
+        margin-bottom: 2rem;
+        border: 1px solid var(--ks-border);
+        position: relative;
+        overflow: hidden;
+    }
+    .welcome-section::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -20%;
+        width: 400px;
+        height: 400px;
+        background: radial-gradient(circle, var(--ks-accent-subtle) 0%, transparent 70%);
+        opacity: 0.5;
+    }
+    .welcome-section h1 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        position: relative;
+    }
+    .welcome-section p {
+        color: var(--ks-text-secondary);
+        margin: 0;
+        position: relative;
+    }
+    .current-date {
+        font-size: 0.875rem;
+        color: var(--ks-text-muted);
+        margin-top: 0.5rem;
+    }
+    
+    .action-card {
+        background: var(--ks-bg-card);
+        border: 1px solid var(--ks-border);
+        border-radius: var(--radius);
+        transition: all 0.2s ease;
+        overflow: hidden;
+    }
+    .action-card:hover {
+        border-color: var(--ks-border-light);
+        transform: translateY(-2px);
+        box-shadow: var(--ks-shadow);
+    }
+    .action-card .card-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: var(--radius-sm);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin-bottom: 1rem;
+    }
+    .action-card.timesheet .card-icon {
+        background: var(--ks-accent-subtle);
+        color: var(--ks-accent);
+    }
+    .action-card.expense .card-icon {
+        background: var(--ks-success-subtle);
+        color: var(--ks-success);
+    }
+    .action-card .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        margin: 1.5rem 0;
+        padding: 1rem;
+        background: var(--ks-bg-secondary);
+        border-radius: var(--radius-sm);
+    }
+    .action-card .stat-item {
+        text-align: center;
+    }
+    .action-card .stat-value {
+        font-size: 1.25rem;
+        font-weight: 700;
+        font-family: var(--font-mono);
+        color: var(--ks-text-primary);
+    }
+    .action-card .stat-label {
+        font-size: 0.6875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--ks-text-muted);
+        margin-top: 0.25rem;
+    }
+    .action-card .card-period {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--ks-text-primary);
+        margin-bottom: 0;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 2.5rem 1.5rem;
+    }
+    .empty-state i {
+        font-size: 3rem;
+        color: var(--ks-text-muted);
+        margin-bottom: 1rem;
+    }
+    .empty-state h6 {
+        color: var(--ks-text-secondary);
+        margin-bottom: 0.5rem;
+    }
+    .empty-state p {
+        color: var(--ks-text-muted);
+        font-size: 0.875rem;
+        margin: 0;
+    }
+    
+    .activity-table tbody tr {
+        transition: background 0.15s ease;
+    }
+    .activity-table .type-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: var(--radius-sm);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 0.5rem;
+    }
+    .activity-table .type-icon.timesheet {
+        background: var(--ks-accent-subtle);
+        color: var(--ks-accent);
+    }
+    .activity-table .type-icon.expense {
+        background: var(--ks-success-subtle);
+        color: var(--ks-success);
+    }
+    
+    .fade-in {
+        animation: fadeIn 0.4s ease-out;
+    }
+    .fade-in-delay-1 { animation-delay: 0.1s; opacity: 0; animation-fill-mode: forwards; }
+    .fade-in-delay-2 { animation-delay: 0.2s; opacity: 0; animation-fill-mode: forwards; }
+    .fade-in-delay-3 { animation-delay: 0.3s; opacity: 0; animation-fill-mode: forwards; }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="page-header">
-    <h1>Dashboard</h1>
-    <p class="text-muted mb-0">Welcome back, {{ user.get_short_name|default:user.email }}</p>
+<!-- Welcome Section -->
+<div class="welcome-section fade-in">
+    <h1>Welcome back, {{ user.first_name|default:user.email }}</h1>
+    <p>Manage your timesheets and expenses from your personal dashboard</p>
+    <div class="current-date">
+        <i class="bi bi-calendar3 me-1"></i>{% now "l, F j, Y" %}
+    </div>
 </div>
 
 <div class="row g-4">
     <!-- Current Timesheet Card -->
-    <div class="col-lg-6">
-        <div class="card h-100">
+    <div class="col-lg-6 fade-in fade-in-delay-1">
+        <div class="card action-card timesheet h-100">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-clock me-2"></i>Current Timesheet</span>
                 {% if current_timesheet %}
@@ -22,45 +180,49 @@
             </div>
             <div class="card-body">
                 {% if current_timesheet %}
-                <h5 class="mb-3">{{ current_ts_period.display_name }}</h5>
-
-                <div class="row text-center mb-4">
-                    <div class="col">
-                        <div class="text-muted small">Hours Logged</div>
-                        <div class="h3 mb-0" style="font-family: var(--font-mono);">{{ current_timesheet.total_hours }}</div>
+                <div class="d-flex align-items-start justify-content-between mb-2">
+                    <div class="card-icon">
+                        <i class="bi bi-calendar-check"></i>
                     </div>
-                    <div class="col">
-                        <div class="text-muted small">Due Date</div>
-                        <div class="h5 mb-0">{{ current_ts_period.due_date|date:"M j" }}</div>
+                    {% if current_ts_period.is_past_due and current_timesheet.status == 'DRAFT' %}
+                    <span class="badge bg-danger">
+                        <i class="bi bi-exclamation-triangle me-1"></i>Overdue
+                    </span>
+                    {% endif %}
+                </div>
+                <p class="card-period">{{ current_ts_period.display_name }}</p>
+                
+                <div class="stat-grid">
+                    <div class="stat-item">
+                        <div class="stat-value">{{ current_timesheet.total_hours|floatformat:1 }}</div>
+                        <div class="stat-label">Hours</div>
                     </div>
-                    <div class="col">
-                        <div class="text-muted small">Status</div>
-                        <div class="h6 mb-0">
-                            {% if current_ts_period.is_past_due and current_timesheet.status == 'DRAFT' %}
-                            <span class="text-danger"><i class="bi bi-exclamation-triangle"></i> Overdue</span>
-                            {% else %}
-                            {{ current_timesheet.get_status_display }}
-                            {% endif %}
-                        </div>
+                    <div class="stat-item">
+                        <div class="stat-value">{{ current_ts_period.due_date|date:"M j" }}</div>
+                        <div class="stat-label">Due</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">{{ current_timesheet.lines.count }}</div>
+                        <div class="stat-label">Lines</div>
                     </div>
                 </div>
 
-                <div class="d-grid gap-2">
+                <div class="d-grid">
                     {% if current_timesheet.is_editable %}
-                    <a href="{% url 'timesheets:timesheet_edit' current_timesheet.pk %}" class="btn btn-primary">
+                    <a href="{% url 'timesheets:timesheet_edit' current_timesheet.pk %}" class="btn btn-primary btn-lg">
                         <i class="bi bi-pencil me-2"></i>Edit Timesheet
                     </a>
                     {% else %}
-                    <a href="{% url 'timesheets:timesheet_detail' current_timesheet.pk %}" class="btn btn-outline-primary">
+                    <a href="{% url 'timesheets:timesheet_detail' current_timesheet.pk %}" class="btn btn-outline-primary btn-lg">
                         <i class="bi bi-eye me-2"></i>View Timesheet
                     </a>
                     {% endif %}
                 </div>
                 {% else %}
-                <div class="text-center py-4 text-muted">
-                    <i class="bi bi-calendar-x h1 d-block mb-3"></i>
-                    <p>No timesheet period is currently active.</p>
-                    <p class="small">Contact your administrator if you believe this is an error.</p>
+                <div class="empty-state">
+                    <i class="bi bi-calendar-x d-block"></i>
+                    <h6>No Active Period</h6>
+                    <p>No timesheet period is currently active.<br>Contact your administrator if needed.</p>
                 </div>
                 {% endif %}
             </div>
@@ -68,8 +230,8 @@
     </div>
 
     <!-- Current Expense Report Card -->
-    <div class="col-lg-6">
-        <div class="card h-100">
+    <div class="col-lg-6 fade-in fade-in-delay-2">
+        <div class="card action-card expense h-100">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-receipt me-2"></i>Current Expense Report</span>
                 {% if current_expense %}
@@ -80,37 +242,48 @@
             </div>
             <div class="card-body">
                 {% if current_expense %}
-                <h5 class="mb-3">{{ current_expense_month.display_name }}</h5>
-
-                <div class="row text-center mb-4">
-                    <div class="col">
-                        <div class="text-muted small">Total Expenses</div>
-                        <div class="h3 mb-0" style="font-family: var(--font-mono);">${{ current_expense.grand_total|floatformat:2 }}</div>
+                <div class="d-flex align-items-start justify-content-between mb-2">
+                    <div class="card-icon">
+                        <i class="bi bi-wallet2"></i>
                     </div>
-                    <div class="col">
-                        <div class="text-muted small">Due Date</div>
-                        <div class="h5 mb-0">{{ current_expense_month.due_date|date:"M j" }}</div>
+                    {% if current_expense_month.is_past_due and current_expense.status == 'DRAFT' %}
+                    <span class="badge bg-danger">
+                        <i class="bi bi-exclamation-triangle me-1"></i>Overdue
+                    </span>
+                    {% endif %}
+                </div>
+                <p class="card-period">{{ current_expense_month.display_name }}</p>
+                
+                <div class="stat-grid">
+                    <div class="stat-item">
+                        <div class="stat-value">${{ current_expense.grand_total|floatformat:0 }}</div>
+                        <div class="stat-label">Total</div>
                     </div>
-                    <div class="col">
-                        <div class="text-muted small">Items</div>
-                        <div class="h5 mb-0">{{ current_expense.items.count }}</div>
+                    <div class="stat-item">
+                        <div class="stat-value">{{ current_expense_month.due_date|date:"M j" }}</div>
+                        <div class="stat-label">Due</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">{{ current_expense.items.count }}</div>
+                        <div class="stat-label">Items</div>
                     </div>
                 </div>
 
-                <div class="d-grid gap-2">
+                <div class="d-grid">
                     {% if current_expense.is_editable %}
-                    <a href="{% url 'expenses:expense_edit' current_expense.pk %}" class="btn btn-success">
+                    <a href="{% url 'expenses:expense_edit' current_expense.pk %}" class="btn btn-success btn-lg">
                         <i class="bi bi-plus-circle me-2"></i>Add/Edit Expenses
                     </a>
                     {% else %}
-                    <a href="{% url 'expenses:expense_detail' current_expense.pk %}" class="btn btn-outline-success">
+                    <a href="{% url 'expenses:expense_detail' current_expense.pk %}" class="btn btn-outline-success btn-lg">
                         <i class="bi bi-eye me-2"></i>View Report
                     </a>
                     {% endif %}
                 </div>
                 {% else %}
-                <div class="text-center py-4 text-muted">
-                    <i class="bi bi-calendar-x h1 d-block mb-3"></i>
+                <div class="empty-state">
+                    <i class="bi bi-calendar-x d-block"></i>
+                    <h6>No Active Period</h6>
                     <p>No expense period is currently active.</p>
                 </div>
                 {% endif %}
@@ -120,19 +293,23 @@
 </div>
 
 <!-- Recent Activity -->
-<div class="row mt-4">
+<div class="row mt-4 fade-in fade-in-delay-3">
     <div class="col-12">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-clock-history me-2"></i>Recent Submissions</span>
-                <div>
-                    <a href="{% url 'timesheets:timesheet_list' %}" class="btn btn-sm btn-outline-secondary me-2">All Timesheets</a>
-                    <a href="{% url 'expenses:expense_list' %}" class="btn btn-sm btn-outline-secondary">All Expenses</a>
+                <span><i class="bi bi-clock-history me-2"></i>Recent Activity</span>
+                <div class="d-flex gap-2">
+                    <a href="{% url 'timesheets:timesheet_list' %}" class="btn btn-sm btn-secondary">
+                        <i class="bi bi-clock me-1"></i>All Timesheets
+                    </a>
+                    <a href="{% url 'expenses:expense_list' %}" class="btn btn-sm btn-secondary">
+                        <i class="bi bi-receipt me-1"></i>All Expenses
+                    </a>
                 </div>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
-                    <table class="table table-hover mb-0">
+                    <table class="table activity-table mb-0">
                         <thead>
                             <tr>
                                 <th>Type</th>
@@ -140,52 +317,75 @@
                                 <th>Status</th>
                                 <th>Submitted</th>
                                 <th class="text-end">Amount/Hours</th>
-                                <th></th>
+                                <th class="text-end">Action</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for ts in timesheets %}
                             <tr>
-                                <td><i class="bi bi-clock text-primary me-2"></i>Timesheet</td>
-                                <td>{{ ts.period.display_name }}</td>
-                                <td><span class="badge-status badge-{{ ts.status|lower }}">{{ ts.get_status_display }}</span></td>
-                                <td>{{ ts.submitted_at|date:"M j, Y"|default:"-" }}</td>
-                                <td class="text-end" style="font-family: var(--font-mono);">{{ ts.total_hours }} hrs</td>
+                                <td>
+                                    <span class="type-icon timesheet">
+                                        <i class="bi bi-clock"></i>
+                                    </span>
+                                    Timesheet
+                                </td>
+                                <td>
+                                    <span class="fw-medium">{{ ts.period.display_name }}</span>
+                                </td>
+                                <td>
+                                    <span class="badge-status badge-{{ ts.status|lower }}">{{ ts.get_status_display }}</span>
+                                </td>
+                                <td class="text-muted">{{ ts.submitted_at|date:"M j, Y"|default:"Not submitted" }}</td>
+                                <td class="text-end" style="font-family: var(--font-mono); font-weight: 500;">
+                                    {{ ts.total_hours|floatformat:1 }} hrs
+                                </td>
                                 <td class="text-end">
                                     {% if ts.is_editable %}
                                     <a href="{% url 'timesheets:timesheet_edit' ts.pk %}" class="btn btn-sm btn-primary">
-                                        <i class="bi bi-pencil"></i>
+                                        <i class="bi bi-pencil me-1"></i>Edit
                                     </a>
                                     {% else %}
-                                    <a href="{% url 'timesheets:timesheet_detail' ts.pk %}" class="btn btn-sm btn-outline-secondary">
-                                        <i class="bi bi-eye"></i>
+                                    <a href="{% url 'timesheets:timesheet_detail' ts.pk %}" class="btn btn-sm btn-secondary">
+                                        <i class="bi bi-eye me-1"></i>View
                                     </a>
                                     {% endif %}
                                 </td>
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="6" class="text-center py-4 text-muted">
-                                    No timesheets yet
+                                <td colspan="6" class="text-center py-5 text-muted">
+                                    <i class="bi bi-inbox d-block h3 mb-2"></i>
+                                    No timesheets yet. Start by editing your current timesheet above.
                                 </td>
                             </tr>
                             {% endfor %}
 
                             {% for er in expense_reports %}
                             <tr>
-                                <td><i class="bi bi-receipt text-success me-2"></i>Expenses</td>
-                                <td>{{ er.month.display_name }}</td>
-                                <td><span class="badge-status badge-{{ er.status|lower }}">{{ er.get_status_display }}</span></td>
-                                <td>{{ er.submitted_at|date:"M j, Y"|default:"-" }}</td>
-                                <td class="text-end" style="font-family: var(--font-mono);">${{ er.grand_total|floatformat:2 }}</td>
+                                <td>
+                                    <span class="type-icon expense">
+                                        <i class="bi bi-receipt"></i>
+                                    </span>
+                                    Expenses
+                                </td>
+                                <td>
+                                    <span class="fw-medium">{{ er.month.display_name }}</span>
+                                </td>
+                                <td>
+                                    <span class="badge-status badge-{{ er.status|lower }}">{{ er.get_status_display }}</span>
+                                </td>
+                                <td class="text-muted">{{ er.submitted_at|date:"M j, Y"|default:"Not submitted" }}</td>
+                                <td class="text-end" style="font-family: var(--font-mono); font-weight: 500;">
+                                    ${{ er.grand_total|floatformat:2 }}
+                                </td>
                                 <td class="text-end">
                                     {% if er.is_editable %}
                                     <a href="{% url 'expenses:expense_edit' er.pk %}" class="btn btn-sm btn-success">
-                                        <i class="bi bi-pencil"></i>
+                                        <i class="bi bi-pencil me-1"></i>Edit
                                     </a>
                                     {% else %}
-                                    <a href="{% url 'expenses:expense_detail' er.pk %}" class="btn btn-sm btn-outline-secondary">
-                                        <i class="bi bi-eye"></i>
+                                    <a href="{% url 'expenses:expense_detail' er.pk %}" class="btn btn-sm btn-secondary">
+                                        <i class="bi bi-eye me-1"></i>View
                                     </a>
                                     {% endif %}
                                 </td>
@@ -193,8 +393,9 @@
                             {% empty %}
                             {% if not timesheets %}
                             <tr>
-                                <td colspan="6" class="text-center py-4 text-muted">
-                                    No expense reports yet
+                                <td colspan="6" class="text-center py-5 text-muted">
+                                    <i class="bi bi-inbox d-block h3 mb-2"></i>
+                                    No activity yet. Start tracking your time and expenses above.
                                 </td>
                             </tr>
                             {% endif %}
