@@ -1,90 +1,325 @@
 {% extends "base.html" %}
-{% load socialaccount %}
+{% load static socialaccount %}
 
-{% block title %}Sign In - TKG Time & Expense{% endblock %}
+{% block title %}Welcome - Keystone Timesheet & Expenses{% endblock %}
 
 {% block content %}
-<div class="min-vh-100 d-flex align-items-center justify-content-center">
-    <div class="login-container" style="max-width: 420px; width: 100%;">
-        <!-- Logo/Brand -->
-        <div class="text-center mb-5">
-            <div class="login-logo mb-3" style="width: 80px; height: 80px; background: linear-gradient(135deg, var(--tkg-primary) 0%, var(--tkg-primary-light) 100%); border-radius: 20px; display: inline-flex; align-items: center; justify-content: center; color: white; font-size: 2rem; font-weight: 700;">
-                TKG
+<div class="keystone-login-page">
+    <div class="login-container">
+        <!-- Animated Logo -->
+        <div class="logo-container">
+            <img src="{% static 'images/keystone-logo.png' %}" alt="Keystone" class="keystone-logo" onerror="this.style.display='none'; document.getElementById('logo-fallback').style.display='block';">
+            <div id="logo-fallback" class="logo-fallback" style="display:none;">
+                <!-- SVG Fallback - Keystone arch design -->
+                <svg width="140" height="120" viewBox="0 0 140 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="archGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#4a90d9;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#1e3a5f;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <!-- Main arch structure -->
+                    <path d="M20 110 L20 50 Q20 20, 70 20 Q120 20, 120 50 L120 110" stroke="url(#archGradient)" stroke-width="8" fill="none" stroke-linecap="round"/>
+                    <!-- Left pillar details -->
+                    <path d="M25 110 L25 55" stroke="url(#archGradient)" stroke-width="3" fill="none" opacity="0.7"/>
+                    <path d="M30 110 L30 48" stroke="url(#archGradient)" stroke-width="2" fill="none" opacity="0.5"/>
+                    <!-- Right pillar details -->
+                    <path d="M115 110 L115 55" stroke="url(#archGradient)" stroke-width="3" fill="none" opacity="0.7"/>
+                    <path d="M110 110 L110 48" stroke="url(#archGradient)" stroke-width="2" fill="none" opacity="0.5"/>
+                    <!-- Keystone at top -->
+                    <path d="M60 25 L70 15 L80 25 L75 35 L65 35 Z" fill="url(#archGradient)" opacity="0.9"/>
+                    <!-- Inner arch lines -->
+                    <path d="M35 100 L35 55 Q35 35, 70 35 Q105 35, 105 55 L105 100" stroke="url(#archGradient)" stroke-width="2" fill="none" opacity="0.4"/>
+                </svg>
             </div>
-            <h2 class="h4 mb-1" style="color: var(--tkg-primary);">Time & Expense Portal</h2>
-            <p class="text-muted">Sign in to manage your timesheets and expenses</p>
         </div>
 
-        <!-- Login Card -->
-        <div class="card shadow-lg border-0" style="border-radius: 1rem;">
-            <div class="card-body p-4 p-md-5">
-                <h5 class="card-title text-center mb-4">Welcome Back</h5>
+        <!-- Welcome Text -->
+        <div class="welcome-text">
+            <h1>Keystone Timesheet and Expenses Portal</h1>
+            <p class="subtitle">Streamline your time tracking and expense management</p>
+        </div>
 
-                {% if messages %}
-                {% for message in messages %}
-                <div class="alert alert-{{ message.tags }} alert-sm" role="alert">
-                    {{ message }}
-                </div>
-                {% endfor %}
-                {% endif %}
-
-                <!-- Microsoft Sign-In Button -->
-                <div class="d-grid gap-3">
-                    <a href="{% provider_login_url 'microsoft' %}" class="btn btn-lg d-flex align-items-center justify-content-center gap-3" style="background: #2f2f2f; color: white; padding: 0.875rem 1.5rem; border-radius: 0.5rem;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 21 21">
-                            <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
-                            <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
-                            <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
-                            <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
-                        </svg>
-                        <span>Sign in with Microsoft</span>
-                    </a>
-                </div>
-
-                <div class="text-center mt-4">
-                    <small class="text-muted">
-                        Use your company Microsoft account to sign in.
-                    </small>
-                </div>
+        <!-- Login Options -->
+        <div class="login-options">
+            {% if messages %}
+            {% for message in messages %}
+            <div class="alert-message {% if message.tags %}alert-{{ message.tags }}{% endif %}">
+                {{ message }}
             </div>
+            {% endfor %}
+            {% endif %}
+
+            <!-- Sign In Button -->
+            <a href="{% provider_login_url 'microsoft' %}" class="btn-login btn-signin">
+                <svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 21 21">
+                    <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+                    <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+                    <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+                    <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+                </svg>
+                <span>Sign in with Microsoft</span>
+            </a>
+
+            <!-- Divider -->
+            <div class="divider">
+                <span>or</span>
+            </div>
+
+            <!-- Sign Up Button -->
+            <a href="{% provider_login_url 'microsoft' %}?signup=true" class="btn-login btn-signup">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <line x1="19" y1="8" x2="19" y2="14"></line>
+                    <line x1="22" y1="11" x2="16" y2="11"></line>
+                </svg>
+                <span>First time signing in? Sign up</span>
+            </a>
+
+            <p class="help-text">
+                Use your company Microsoft account to access the portal.
+                <br>New users will be prompted to select their role after signing in.
+            </p>
         </div>
 
         <!-- Footer -->
-        <div class="text-center mt-4">
-            <small class="text-muted">
-                &copy; {% now "Y" %} TKG. All rights reserved.
-            </small>
+        <div class="login-footer">
+            <p>&copy; {% now "Y" %} The Keystone Group. All rights reserved.</p>
         </div>
     </div>
 </div>
 
 <style>
-    body {
-        background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+    /* Reset and base */
+    .keystone-login-page {
+        min-height: 100vh;
+        background: #0a0a0a;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        overflow: hidden;
     }
 
     .login-container {
-        animation: fadeIn 0.5s ease-out;
+        max-width: 480px;
+        width: 100%;
+        text-align: center;
     }
 
-    @keyframes fadeIn {
-        from {
+    /* Logo Animation */
+    .logo-container {
+        margin-bottom: 2.5rem;
+        animation: logoDescend 1s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        opacity: 0;
+    }
+
+    .keystone-logo {
+        width: 140px;
+        height: auto;
+        filter: drop-shadow(0 0 30px rgba(100, 149, 237, 0.4));
+    }
+
+    @keyframes logoDescend {
+        0% {
             opacity: 0;
-            transform: translateY(-10px);
+            transform: translateY(-100px) scale(0.8);
         }
-        to {
+        60% {
+            opacity: 1;
+            transform: translateY(10px) scale(1.02);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+    }
+
+    /* Welcome Text Animation */
+    .welcome-text {
+        margin-bottom: 3rem;
+        animation: fadeInUp 0.8s ease-out 0.4s forwards;
+        opacity: 0;
+    }
+
+    .welcome-text h1 {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        font-size: 1.75rem;
+        font-weight: 600;
+        color: #ffffff;
+        margin-bottom: 0.75rem;
+        letter-spacing: -0.02em;
+    }
+
+    .welcome-text .subtitle {
+        font-size: 1rem;
+        color: #6b7280;
+        margin: 0;
+    }
+
+    @keyframes fadeInUp {
+        0% {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        100% {
             opacity: 1;
             transform: translateY(0);
         }
     }
 
-    .btn:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    /* Login Options Animation */
+    .login-options {
+        animation: fadeInUp 0.8s ease-out 0.7s forwards;
+        opacity: 0;
     }
 
-    .btn {
-        transition: all 0.2s ease;
+    /* Alert Messages */
+    .alert-message {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        color: #f87171;
+        padding: 0.875rem 1rem;
+        border-radius: 0.75rem;
+        margin-bottom: 1.5rem;
+        font-size: 0.875rem;
+    }
+
+    .alert-message.alert-success {
+        background: rgba(34, 197, 94, 0.1);
+        border-color: rgba(34, 197, 94, 0.3);
+        color: #4ade80;
+    }
+
+    /* Login Buttons */
+    .btn-login {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        width: 100%;
+        padding: 1rem 1.5rem;
+        border-radius: 0.75rem;
+        font-size: 1rem;
+        font-weight: 500;
+        text-decoration: none;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        cursor: pointer;
+        border: none;
+    }
+
+    .btn-signin {
+        background: #ffffff;
+        color: #1a1a1a;
+        box-shadow: 0 4px 14px rgba(255, 255, 255, 0.1);
+    }
+
+    .btn-signin:hover {
+        background: #f3f4f6;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(255, 255, 255, 0.15);
+        color: #1a1a1a;
+        text-decoration: none;
+    }
+
+    .btn-signup {
+        background: transparent;
+        color: #9ca3af;
+        border: 1px solid #374151;
+    }
+
+    .btn-signup:hover {
+        background: #1f2937;
+        color: #ffffff;
+        border-color: #4b5563;
+        transform: translateY(-2px);
+        text-decoration: none;
+    }
+
+    /* Divider */
+    .divider {
+        display: flex;
+        align-items: center;
+        margin: 1.5rem 0;
+        color: #4b5563;
+        font-size: 0.875rem;
+    }
+
+    .divider::before,
+    .divider::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: #374151;
+    }
+
+    .divider span {
+        padding: 0 1rem;
+    }
+
+    /* Help Text */
+    .help-text {
+        margin-top: 2rem;
+        font-size: 0.8125rem;
+        color: #6b7280;
+        line-height: 1.6;
+    }
+
+    /* Footer */
+    .login-footer {
+        margin-top: 3rem;
+        animation: fadeInUp 0.8s ease-out 1s forwards;
+        opacity: 0;
+    }
+
+    .login-footer p {
+        font-size: 0.75rem;
+        color: #4b5563;
+        margin: 0;
+    }
+
+    /* Responsive */
+    @media (max-width: 480px) {
+        .keystone-login-page {
+            padding: 1.5rem;
+        }
+
+        .welcome-text h1 {
+            font-size: 1.5rem;
+        }
+
+        .keystone-logo {
+            width: 100px;
+        }
+    }
+
+    /* Glow effect on logo hover */
+    .logo-container:hover .keystone-logo {
+        filter: drop-shadow(0 0 40px rgba(100, 149, 237, 0.6));
+        transform: scale(1.05);
+        transition: all 0.3s ease;
+    }
+
+    .keystone-logo {
+        transition: all 0.3s ease;
+    }
+
+    /* Fallback logo styling */
+    .logo-fallback {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .logo-fallback svg {
+        filter: drop-shadow(0 0 30px rgba(100, 149, 237, 0.4));
+        transition: all 0.3s ease;
+    }
+
+    .logo-container:hover .logo-fallback svg {
+        filter: drop-shadow(0 0 40px rgba(100, 149, 237, 0.6));
+        transform: scale(1.05);
     }
 </style>
 {% endblock %}
