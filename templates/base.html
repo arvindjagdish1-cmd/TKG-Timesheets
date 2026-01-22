@@ -4,12 +4,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}TKG Time & Expense{% endblock %}</title>
+    <title>{% block title %}Keystone Time & Expense{% endblock %}</title>
 
-    <!-- Fonts: DM Sans for body, JetBrains Mono for numbers -->
+    <!-- Fonts: Inter for modern look -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
     <!-- Bootstrap 5.3 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -17,28 +17,50 @@
 
     <style>
         :root {
-            --tkg-primary: #1a365d;
-            --tkg-primary-light: #2c5282;
-            --tkg-accent: #ed8936;
-            --tkg-accent-hover: #dd6b20;
-            --tkg-success: #38a169;
-            --tkg-warning: #d69e2e;
-            --tkg-danger: #e53e3e;
-            --tkg-bg: #f7fafc;
-            --tkg-card-bg: #ffffff;
-            --tkg-text: #2d3748;
-            --tkg-text-muted: #718096;
-            --tkg-border: #e2e8f0;
-            --tkg-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
-            --tkg-shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+            /* Dark theme - sleek and modern */
+            --ks-bg-primary: #0f0f0f;
+            --ks-bg-secondary: #1a1a1a;
+            --ks-bg-tertiary: #242424;
+            --ks-bg-card: #1e1e1e;
+            --ks-bg-hover: #2a2a2a;
+            
+            --ks-text-primary: #ffffff;
+            --ks-text-secondary: #a0a0a0;
+            --ks-text-muted: #6b6b6b;
+            
+            --ks-border: #2e2e2e;
+            --ks-border-light: #3a3a3a;
+            
+            --ks-accent: #3b82f6;
+            --ks-accent-hover: #2563eb;
+            --ks-accent-subtle: rgba(59, 130, 246, 0.1);
+            
+            --ks-success: #22c55e;
+            --ks-success-subtle: rgba(34, 197, 94, 0.1);
+            --ks-warning: #f59e0b;
+            --ks-warning-subtle: rgba(245, 158, 11, 0.1);
+            --ks-danger: #ef4444;
+            --ks-danger-subtle: rgba(239, 68, 68, 0.1);
+            
+            --ks-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+            --ks-shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+            
             --font-mono: 'JetBrains Mono', monospace;
+            --radius: 0.75rem;
+            --radius-sm: 0.5rem;
+        }
+
+        * {
+            box-sizing: border-box;
         }
 
         body {
-            font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--tkg-bg);
-            color: var(--tkg-text);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--ks-bg-primary);
+            color: var(--ks-text-primary);
             min-height: 100vh;
+            font-size: 0.9375rem;
+            line-height: 1.6;
         }
 
         /* Sidebar navigation */
@@ -48,8 +70,8 @@
             left: 0;
             width: 260px;
             height: 100vh;
-            background: linear-gradient(180deg, var(--tkg-primary) 0%, var(--tkg-primary-light) 100%);
-            color: white;
+            background: var(--ks-bg-secondary);
+            border-right: 1px solid var(--ks-border);
             z-index: 1000;
             display: flex;
             flex-direction: column;
@@ -57,17 +79,26 @@
 
         .sidebar-brand {
             padding: 1.5rem;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
+            border-bottom: 1px solid var(--ks-border);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
         }
 
-        .sidebar-brand h5 {
+        .sidebar-brand img {
+            width: 36px;
+            height: auto;
+        }
+
+        .sidebar-brand-text h5 {
             margin: 0;
             font-weight: 600;
+            font-size: 1rem;
             letter-spacing: -0.02em;
         }
 
-        .sidebar-brand small {
-            opacity: 0.7;
+        .sidebar-brand-text small {
+            color: var(--ks-text-muted);
             font-size: 0.75rem;
         }
 
@@ -78,12 +109,13 @@
         }
 
         .nav-section {
-            padding: 0.5rem 1.5rem;
-            font-size: 0.7rem;
+            padding: 0.75rem 1.5rem 0.5rem;
+            font-size: 0.6875rem;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
-            opacity: 0.5;
-            margin-top: 1rem;
+            letter-spacing: 0.08em;
+            color: var(--ks-text-muted);
+            font-weight: 600;
+            margin-top: 0.5rem;
         }
 
         .nav-section:first-child {
@@ -91,50 +123,102 @@
         }
 
         .sidebar .nav-link {
-            padding: 0.65rem 1.5rem;
-            color: rgba(255,255,255,0.8);
+            padding: 0.625rem 1.5rem;
+            color: var(--ks-text-secondary);
             display: flex;
             align-items: center;
             gap: 0.75rem;
             transition: all 0.15s ease;
-            border-left: 3px solid transparent;
+            margin: 0.125rem 0.75rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.875rem;
+            font-weight: 500;
         }
 
         .sidebar .nav-link:hover {
-            background: rgba(255,255,255,0.1);
-            color: white;
+            background: var(--ks-bg-hover);
+            color: var(--ks-text-primary);
         }
 
         .sidebar .nav-link.active {
-            background: rgba(255,255,255,0.15);
-            color: white;
-            border-left-color: var(--tkg-accent);
+            background: var(--ks-accent-subtle);
+            color: var(--ks-accent);
         }
 
         .sidebar .nav-link i {
-            font-size: 1.1rem;
+            font-size: 1.125rem;
             width: 1.25rem;
             text-align: center;
+            opacity: 0.8;
+        }
+
+        .sidebar .nav-link.active i {
+            opacity: 1;
         }
 
         .sidebar .nav-link .badge {
             margin-left: auto;
-            font-size: 0.65rem;
+            font-size: 0.6875rem;
+            padding: 0.25em 0.5em;
+            background: var(--ks-accent);
         }
 
         .sidebar-footer {
             padding: 1rem 1.5rem;
-            border-top: 1px solid rgba(255,255,255,0.1);
-            font-size: 0.85rem;
+            border-top: 1px solid var(--ks-border);
         }
 
-        .sidebar-footer .user-name {
+        .sidebar-user {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .sidebar-user-avatar {
+            width: 36px;
+            height: 36px;
+            background: var(--ks-bg-tertiary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: var(--ks-accent);
+        }
+
+        .sidebar-user-info .user-name {
             font-weight: 500;
+            font-size: 0.875rem;
         }
 
-        .sidebar-footer .user-email {
+        .sidebar-user-info .user-email {
             font-size: 0.75rem;
-            opacity: 0.7;
+            color: var(--ks-text-muted);
+        }
+
+        .btn-signout {
+            width: 100%;
+            padding: 0.5rem;
+            background: transparent;
+            border: 1px solid var(--ks-border);
+            border-radius: var(--radius-sm);
+            color: var(--ks-text-secondary);
+            font-size: 0.8125rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            transition: all 0.15s ease;
+            text-decoration: none;
+        }
+
+        .btn-signout:hover {
+            background: var(--ks-bg-hover);
+            border-color: var(--ks-border-light);
+            color: var(--ks-text-primary);
         }
 
         /* Main content */
@@ -146,141 +230,327 @@
 
         .page-header {
             margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
         }
 
         .page-header h1 {
-            font-size: 1.75rem;
+            font-size: 1.5rem;
             font-weight: 600;
             margin: 0;
-            color: var(--tkg-primary);
+            letter-spacing: -0.02em;
         }
 
         .page-header .breadcrumb {
-            margin: 0.5rem 0 0;
-            font-size: 0.85rem;
+            margin: 0;
+            font-size: 0.8125rem;
+            background: transparent;
+            padding: 0;
+        }
+
+        .page-header .breadcrumb-item {
+            color: var(--ks-text-muted);
+        }
+
+        .page-header .breadcrumb-item.active {
+            color: var(--ks-text-secondary);
+        }
+
+        .page-header .breadcrumb-item + .breadcrumb-item::before {
+            color: var(--ks-text-muted);
         }
 
         /* Cards */
         .card {
-            background: var(--tkg-card-bg);
-            border: 1px solid var(--tkg-border);
-            border-radius: 0.75rem;
-            box-shadow: var(--tkg-shadow);
+            background: var(--ks-bg-card);
+            border: 1px solid var(--ks-border);
+            border-radius: var(--radius);
+            box-shadow: none;
         }
 
         .card-header {
             background: transparent;
-            border-bottom: 1px solid var(--tkg-border);
+            border-bottom: 1px solid var(--ks-border);
             padding: 1rem 1.25rem;
             font-weight: 600;
+            font-size: 0.9375rem;
+        }
+
+        .card-body {
+            padding: 1.25rem;
         }
 
         /* Status badges */
         .badge-status {
             font-weight: 500;
-            padding: 0.35em 0.75em;
+            padding: 0.375em 0.75em;
             border-radius: 999px;
             font-size: 0.75rem;
+            letter-spacing: 0.01em;
         }
 
-        .badge-draft { background: #edf2f7; color: #4a5568; }
-        .badge-submitted { background: #fef3c7; color: #92400e; }
-        .badge-approved { background: #c6f6d5; color: #276749; }
-        .badge-returned { background: #fed7d7; color: #c53030; }
+        .badge-draft { 
+            background: var(--ks-bg-tertiary); 
+            color: var(--ks-text-secondary); 
+        }
+        .badge-submitted { 
+            background: var(--ks-warning-subtle); 
+            color: var(--ks-warning); 
+        }
+        .badge-approved { 
+            background: var(--ks-success-subtle); 
+            color: var(--ks-success); 
+        }
+        .badge-returned { 
+            background: var(--ks-danger-subtle); 
+            color: var(--ks-danger); 
+        }
 
         /* Buttons */
+        .btn {
+            font-weight: 500;
+            font-size: 0.875rem;
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius-sm);
+            transition: all 0.15s ease;
+        }
+
         .btn-primary {
-            background: var(--tkg-primary);
-            border-color: var(--tkg-primary);
-        }
-
-        .btn-primary:hover {
-            background: var(--tkg-primary-light);
-            border-color: var(--tkg-primary-light);
-        }
-
-        .btn-accent {
-            background: var(--tkg-accent);
-            border-color: var(--tkg-accent);
+            background: var(--ks-accent);
+            border-color: var(--ks-accent);
             color: white;
         }
 
-        .btn-accent:hover {
-            background: var(--tkg-accent-hover);
-            border-color: var(--tkg-accent-hover);
+        .btn-primary:hover {
+            background: var(--ks-accent-hover);
+            border-color: var(--ks-accent-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: var(--ks-bg-tertiary);
+            border-color: var(--ks-border);
+            color: var(--ks-text-secondary);
+        }
+
+        .btn-secondary:hover {
+            background: var(--ks-bg-hover);
+            border-color: var(--ks-border-light);
+            color: var(--ks-text-primary);
+        }
+
+        .btn-success {
+            background: var(--ks-success);
+            border-color: var(--ks-success);
+        }
+
+        .btn-danger {
+            background: var(--ks-danger);
+            border-color: var(--ks-danger);
+        }
+
+        .btn-outline-primary {
+            color: var(--ks-accent);
+            border-color: var(--ks-accent);
+            background: transparent;
+        }
+
+        .btn-outline-primary:hover {
+            background: var(--ks-accent);
             color: white;
         }
 
         /* Tables */
+        .table {
+            --bs-table-bg: transparent;
+            --bs-table-color: var(--ks-text-primary);
+            --bs-table-border-color: var(--ks-border);
+            margin-bottom: 0;
+        }
+
         .table th {
             font-weight: 600;
             font-size: 0.75rem;
             text-transform: uppercase;
-            letter-spacing: 0.03em;
-            color: var(--tkg-text-muted);
-            border-bottom-width: 1px;
+            letter-spacing: 0.04em;
+            color: var(--ks-text-muted);
+            border-bottom: 1px solid var(--ks-border);
+            padding: 0.875rem 1rem;
+            background: var(--ks-bg-secondary);
+        }
+
+        .table td {
+            padding: 0.875rem 1rem;
+            vertical-align: middle;
+            border-bottom: 1px solid var(--ks-border);
+        }
+
+        .table tbody tr:hover {
+            background: var(--ks-bg-hover);
+        }
+
+        .table tbody tr:last-child td {
+            border-bottom: none;
         }
 
         /* Timesheet grid */
         .timesheet-grid {
             font-family: var(--font-mono);
-            font-size: 0.85rem;
+            font-size: 0.8125rem;
         }
 
         .timesheet-grid th,
         .timesheet-grid td {
             text-align: center;
-            padding: 0.5rem;
-            min-width: 50px;
+            padding: 0.5rem 0.375rem;
+            min-width: 48px;
         }
 
         .timesheet-grid th.day-header {
-            font-size: 0.7rem;
+            font-size: 0.6875rem;
+            font-weight: 500;
         }
 
         .timesheet-grid th.day-header .day-num {
             display: block;
-            font-size: 1rem;
+            font-size: 0.9375rem;
             font-weight: 600;
+            color: var(--ks-text-primary);
         }
 
         .timesheet-grid .charge-code-cell {
             text-align: left;
             font-weight: 500;
-            min-width: 120px;
+            min-width: 140px;
+            font-family: 'Inter', sans-serif;
         }
 
         .timesheet-grid input[type="number"],
         .timesheet-grid .hours-input {
             width: 100%;
             text-align: center;
-            border: 1px solid var(--tkg-border);
+            background: var(--ks-bg-tertiary);
+            border: 1px solid var(--ks-border);
             border-radius: 4px;
-            padding: 0.25rem;
+            padding: 0.375rem;
             font-family: var(--font-mono);
-            font-size: 0.85rem;
+            font-size: 0.8125rem;
+            color: var(--ks-text-primary);
+            transition: all 0.15s ease;
         }
 
         .timesheet-grid input[type="number"]:focus,
         .timesheet-grid .hours-input:focus {
-            border-color: var(--tkg-primary);
+            border-color: var(--ks-accent);
             outline: none;
-            box-shadow: 0 0 0 2px rgba(26, 54, 93, 0.1);
+            box-shadow: 0 0 0 2px var(--ks-accent-subtle);
+            background: var(--ks-bg-secondary);
         }
 
         .timesheet-grid .weekend {
-            background: #f7fafc;
+            background: var(--ks-bg-secondary);
         }
 
         .timesheet-grid .total-cell {
             font-weight: 600;
-            background: #edf2f7;
+            background: var(--ks-bg-tertiary);
+            color: var(--ks-accent);
+        }
+
+        /* Form controls */
+        .form-control, .form-select {
+            background: var(--ks-bg-tertiary);
+            border: 1px solid var(--ks-border);
+            color: var(--ks-text-primary);
+            border-radius: var(--radius-sm);
+            padding: 0.625rem 0.875rem;
+            font-size: 0.875rem;
+        }
+
+        .form-control:focus, .form-select:focus {
+            background: var(--ks-bg-secondary);
+            border-color: var(--ks-accent);
+            box-shadow: 0 0 0 2px var(--ks-accent-subtle);
+            color: var(--ks-text-primary);
+        }
+
+        .form-control::placeholder {
+            color: var(--ks-text-muted);
+        }
+
+        .form-label {
+            font-weight: 500;
+            font-size: 0.8125rem;
+            color: var(--ks-text-secondary);
+            margin-bottom: 0.375rem;
         }
 
         /* Alerts */
         .alert {
-            border-radius: 0.5rem;
+            border-radius: var(--radius-sm);
             border: none;
+            padding: 0.875rem 1rem;
+            font-size: 0.875rem;
+        }
+
+        .alert-success {
+            background: var(--ks-success-subtle);
+            color: var(--ks-success);
+        }
+
+        .alert-warning {
+            background: var(--ks-warning-subtle);
+            color: var(--ks-warning);
+        }
+
+        .alert-danger {
+            background: var(--ks-danger-subtle);
+            color: var(--ks-danger);
+        }
+
+        .alert-info {
+            background: var(--ks-accent-subtle);
+            color: var(--ks-accent);
+        }
+
+        /* Stats cards */
+        .stat-card {
+            background: var(--ks-bg-card);
+            border: 1px solid var(--ks-border);
+            border-radius: var(--radius);
+            padding: 1.25rem;
+            transition: all 0.2s ease;
+        }
+
+        .stat-card:hover {
+            border-color: var(--ks-border-light);
+            transform: translateY(-2px);
+        }
+
+        .stat-card .stat-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .stat-card .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-card .stat-label {
+            font-size: 0.8125rem;
+            color: var(--ks-text-muted);
         }
 
         /* Responsive */
@@ -299,7 +569,7 @@
             }
 
             .mobile-nav-toggle {
-                display: block !important;
+                display: flex !important;
             }
         }
 
@@ -309,11 +579,15 @@
             top: 1rem;
             left: 1rem;
             z-index: 1001;
-            background: var(--tkg-primary);
-            color: white;
-            border: none;
+            background: var(--ks-bg-card);
+            color: var(--ks-text-primary);
+            border: 1px solid var(--ks-border);
             padding: 0.5rem 0.75rem;
-            border-radius: 0.5rem;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
         }
 
         /* Smooth transitions for HTMX */
@@ -326,8 +600,52 @@
         }
 
         /* Success flash for saved inputs */
-        .bg-success-subtle {
-            transition: background-color 0.3s ease;
+        .input-saved {
+            animation: inputSaved 0.5s ease;
+        }
+
+        @keyframes inputSaved {
+            0%, 100% { background: var(--ks-bg-tertiary); }
+            50% { background: var(--ks-success-subtle); }
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--ks-bg-secondary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--ks-border-light);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--ks-text-muted);
+        }
+
+        /* Links */
+        a {
+            color: var(--ks-accent);
+            text-decoration: none;
+        }
+
+        a:hover {
+            color: var(--ks-accent-hover);
+        }
+
+        /* Footer */
+        .page-footer {
+            margin-top: 3rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--ks-border);
+            text-align: center;
+            font-size: 0.75rem;
+            color: var(--ks-text-muted);
         }
     </style>
 
@@ -338,24 +656,27 @@
     <!-- Sidebar -->
     <nav class="sidebar" id="sidebar">
         <div class="sidebar-brand">
-            <h5>TKG</h5>
-            <small>Time & Expense Portal</small>
+            <img src="{% static 'images/keystone-logo.png' %}" alt="Keystone" onerror="this.style.display='none'">
+            <div class="sidebar-brand-text">
+                <h5>Keystone</h5>
+                <small>Time & Expense Portal</small>
+            </div>
         </div>
 
         <div class="sidebar-nav">
             <div class="nav-section">Main</div>
             <a href="{% url 'timesheets:dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard' and request.resolver_match.app_name == 'timesheets' %}active{% endif %}">
-                <i class="bi bi-house"></i> Dashboard
+                <i class="bi bi-grid-1x2"></i> Dashboard
             </a>
 
             <div class="nav-section">Time</div>
             <a href="{% url 'timesheets:timesheet_list' %}" class="nav-link {% if 'timesheet' in request.path and 'review' not in request.path %}active{% endif %}">
-                <i class="bi bi-clock"></i> My Timesheets
+                <i class="bi bi-clock-history"></i> My Timesheets
             </a>
 
             <div class="nav-section">Expenses</div>
             <a href="{% url 'expenses:expense_list' %}" class="nav-link {% if 'expense' in request.path and 'review' not in request.path %}active{% endif %}">
-                <i class="bi bi-receipt"></i> My Expenses
+                <i class="bi bi-receipt-cutoff"></i> My Expenses
             </a>
 
             {% if user.is_staff or user.groups.filter %}
@@ -363,13 +684,13 @@
             {% if user.is_superuser or is_manager %}
             <div class="nav-section">Admin</div>
             <a href="{% url 'reviews:dashboard' %}" class="nav-link {% if 'reviews' in request.path %}active{% endif %}">
-                <i class="bi bi-clipboard-check"></i> Review Submissions
+                <i class="bi bi-clipboard2-check"></i> Review Submissions
             </a>
             <a href="{% url 'exports:export_dashboard' %}" class="nav-link {% if 'exports' in request.path %}active{% endif %}">
-                <i class="bi bi-download"></i> Export Reports
+                <i class="bi bi-file-earmark-arrow-down"></i> Export Reports
             </a>
             <a href="{% url 'admin:index' %}" class="nav-link">
-                <i class="bi bi-gear"></i> Admin Panel
+                <i class="bi bi-sliders"></i> Admin Panel
             </a>
             {% endif %}
             {% endwith %}
@@ -377,21 +698,28 @@
         </div>
 
         <div class="sidebar-footer">
-            <div class="user-name">{{ user.get_full_name|default:user.email }}</div>
-            <div class="user-email">{{ user.email }}</div>
-            <a href="{% url 'account_logout' %}" class="btn btn-sm btn-outline-light mt-2 w-100">
+            <div class="sidebar-user">
+                <div class="sidebar-user-avatar">
+                    {{ user.first_name|slice:":1"|default:user.email|slice:":1"|upper }}
+                </div>
+                <div class="sidebar-user-info">
+                    <div class="user-name">{{ user.get_full_name|default:user.email }}</div>
+                    <div class="user-email">{{ user.email }}</div>
+                </div>
+            </div>
+            <a href="{% url 'account_logout' %}" class="btn-signout">
                 <i class="bi bi-box-arrow-right"></i> Sign Out
             </a>
         </div>
     </nav>
 
     <button class="mobile-nav-toggle" onclick="document.getElementById('sidebar').classList.toggle('show')">
-        <i class="bi bi-list"></i>
+        <i class="bi bi-list"></i> Menu
     </button>
     {% endif %}
 
     <!-- Main content -->
-    <main class="{% if user.is_authenticated %}main-content{% else %}container py-5{% endif %}">
+    <main class="{% if user.is_authenticated %}main-content{% else %}{% endif %}">
         {% if messages %}
         <div class="messages mb-4">
             {% for message in messages %}
@@ -404,6 +732,12 @@
         {% endif %}
 
         {% block content %}{% endblock %}
+
+        {% if user.is_authenticated %}
+        <footer class="page-footer">
+            <p>&copy; {% now "Y" %} The Keystone Group. All rights reserved.</p>
+        </footer>
+        {% endif %}
     </main>
 
     <!-- Bootstrap JS -->
