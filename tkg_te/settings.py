@@ -160,17 +160,7 @@ SOCIALACCOUNT_PROVIDERS = {
         "TENANT": MICROSOFT_TENANT,
         "SCOPE": ["openid", "email", "profile", "User.Read"],
         "AUTH_PARAMS": {"prompt": "select_account"},
-        **(
-            {
-                "APP": {
-                    "client_id": MICROSOFT_CLIENT_ID,
-                    "secret": MICROSOFT_CLIENT_SECRET,
-                    "key": "",
-                }
-            }
-            if MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET
-            else {}
-        ),
+        # APP config removed - use Django admin SocialApp instead to avoid conflicts
     }
 }
 
