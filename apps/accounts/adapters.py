@@ -1,9 +1,12 @@
 import logging
 
+from allauth.account.utils import perform_login
+from allauth.exceptions import ImmediateHttpResponse
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
 from django.contrib.auth import get_user_model
+from django.shortcuts import redirect
 
 logger = logging.getLogger(__name__)
 
@@ -45,12 +48,19 @@ class DomainRestrictedSocialAccountAdapter(DefaultSocialAccountAdapter):
 
         # 3) Roster allowlist (must exist in Users table)
         User = get_user_model()
-        if not User.objects.filter(email=email, is_active=True).exists():
+        existing_user = User.objects.filter(email=email, is_active=True).first()
+        if not existing_user:
             logger.warning("Microsoft login blocked: %s not on roster.", email)
             raise PermissionDenied("This account is not on the approved roster.")
 
         # Normalize stored email
         sociallogin.user.email = email
+
+        # 4) If the user already exists, auto-connect and login
+        if not sociallogin.is_existing:
+            sociallogin.connect(request, existing_user)
+            perform_login(request, existing_user, email_verification="none")
+            raise ImmediateHttpResponse(redirect(settings.LOGIN_REDIRECT_URL))
 
     def on_authentication_error(
         self,
