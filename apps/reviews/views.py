@@ -110,6 +110,7 @@ def review_dashboard(request):
     """Office Manager dashboard: submission status overview."""
     year, month = _parse_month_param(request.GET.get("month"))
     status_filter = request.GET.get("status", "ALL")
+    status_options = ["ALL", "DRAFT", "SUBMITTED", "RETURNED", "APPROVED", "MISSING"]
 
     months = (
         TimesheetUpload.objects.values_list("year", "month")
@@ -165,6 +166,7 @@ def review_dashboard(request):
         "selected_month": f"{year}-{month:02d}",
         "selected_month_label": _month_label(year, month),
         "status_filter": status_filter,
+        "status_options": status_options,
         "pending_count": pending_count,
     }
     return render(request, "reviews/office_dashboard.html", context)
