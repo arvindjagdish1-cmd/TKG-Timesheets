@@ -100,12 +100,31 @@
                 <form action="{% url 'exports:generate_timesheets' %}" method="post">
                     {% csrf_token %}
                     <div class="mb-3">
-                        <label class="form-label">Select Period</label>
-                        <select name="period_id" class="form-select" required>
-                            {% for period in recent_ts_periods %}
-                            <option value="{{ period.pk }}">{{ period.display_name }}</option>
-                            {% endfor %}
+                        <label class="form-label">Select Range</label>
+                        <select name="range_type" class="form-select js-range-select" data-target="timesheet-range">
+                            <option value="current_month">Full Current Month</option>
+                            <option value="ytd">Full Year-to-Date</option>
+                            <option value="custom">Custom Range</option>
                         </select>
+                    </div>
+                    <div class="mb-3 custom-range" id="timesheet-range" style="display: none;">
+                        <label class="form-label">Custom Period Range</label>
+                        <div class="row g-2">
+                            <div class="col-md-6">
+                                <select name="start_period_id" class="form-select">
+                                    {% for period in recent_ts_periods %}
+                                    <option value="{{ period.pk }}">{{ period.display_name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <select name="end_period_id" class="form-select">
+                                    {% for period in recent_ts_periods %}
+                                    <option value="{{ period.pk }}">{{ period.display_name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Export Format</label>
@@ -138,12 +157,31 @@
                 <form action="{% url 'exports:generate_expenses' %}" method="post">
                     {% csrf_token %}
                     <div class="mb-3">
-                        <label class="form-label">Select Month</label>
-                        <select name="month_id" class="form-select" required>
-                            {% for month in recent_expense_months %}
-                            <option value="{{ month.pk }}">{{ month.display_name }}</option>
-                            {% endfor %}
+                        <label class="form-label">Select Range</label>
+                        <select name="range_type" class="form-select js-range-select" data-target="expense-range">
+                            <option value="current_month">Full Current Month</option>
+                            <option value="ytd">Full Year-to-Date</option>
+                            <option value="custom">Custom Range</option>
                         </select>
+                    </div>
+                    <div class="mb-3 custom-range" id="expense-range" style="display: none;">
+                        <label class="form-label">Custom Month Range</label>
+                        <div class="row g-2">
+                            <div class="col-md-6">
+                                <select name="start_month_id" class="form-select">
+                                    {% for month in recent_expense_months %}
+                                    <option value="{{ month.pk }}">{{ month.display_name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <select name="end_month_id" class="form-select">
+                                    {% for month in recent_expense_months %}
+                                    <option value="{{ month.pk }}">{{ month.display_name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Export Format</label>
@@ -240,4 +278,19 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.querySelectorAll(".js-range-select").forEach((select) => {
+        const targetId = select.dataset.target;
+        const target = document.getElementById(targetId);
+        const toggle = () => {
+            if (!target) return;
+            target.style.display = select.value === "custom" ? "block" : "none";
+        };
+        select.addEventListener("change", toggle);
+        toggle();
+    });
+</script>
 {% endblock %}

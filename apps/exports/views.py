@@ -37,13 +37,61 @@ def office_manager_required(view_func):
     return wrapped
 
 
+def _period_key(period):
+    return period.year * 1000 + period.month * 10 + period.half
+
+
+def _month_key(month):
+    return month.year * 100 + month.month
+
+
+def _select_timesheet_periods(range_type, start_id, end_id):
+    now = timezone.localdate()
+    all_periods = list(TimesheetPeriod.objects.order_by("year", "month", "half"))
+
+    if range_type == "current_month":
+        return [p for p in all_periods if p.year == now.year and p.month == now.month]
+    if range_type == "ytd":
+        return [p for p in all_periods if p.year == now.year and p.month <= now.month]
+    if range_type == "custom":
+        start = get_object_or_404(TimesheetPeriod, pk=start_id)
+        end = get_object_or_404(TimesheetPeriod, pk=end_id)
+        start_key = _period_key(start)
+        end_key = _period_key(end)
+        if start_key > end_key:
+            start_key, end_key = end_key, start_key
+        return [p for p in all_periods if start_key <= _period_key(p) <= end_key]
+
+    return []
+
+
+def _select_expense_months(range_type, start_id, end_id):
+    now = timezone.localdate()
+    all_months = list(ExpenseMonth.objects.order_by("year", "month"))
+
+    if range_type == "current_month":
+        return [m for m in all_months if m.year == now.year and m.month == now.month]
+    if range_type == "ytd":
+        return [m for m in all_months if m.year == now.year and m.month <= now.month]
+    if range_type == "custom":
+        start = get_object_or_404(ExpenseMonth, pk=start_id)
+        end = get_object_or_404(ExpenseMonth, pk=end_id)
+        start_key = _month_key(start)
+        end_key = _month_key(end)
+        if start_key > end_key:
+            start_key, end_key = end_key, start_key
+        return [m for m in all_months if start_key <= _month_key(m) <= end_key]
+
+    return []
+
+
 @login_required
 @office_manager_required
 def export_dashboard(request):
     """Export generation dashboard."""
     # Get recent periods
-    recent_ts_periods = TimesheetPeriod.objects.order_by("-year", "-month", "-half")[:12]
-    recent_expense_months = ExpenseMonth.objects.order_by("-year", "-month")[:6]
+    recent_ts_periods = TimesheetPeriod.objects.order_by("-year", "-month", "-half")
+    recent_expense_months = ExpenseMonth.objects.order_by("-year", "-month")
 
     # Recent export jobs
     recent_exports = ExportJob.objects.order_by("-created_at")[:20]
@@ -61,14 +109,19 @@ def export_dashboard(request):
 @require_POST
 def generate_timesheet_exports(request):
     """Generate timesheet exports for a period."""
-    period_id = request.POST.get("period_id")
-    period = get_object_or_404(TimesheetPeriod, pk=period_id)
+    range_type = request.POST.get("range_type", "current_month")
+    start_period_id = request.POST.get("start_period_id")
+    end_period_id = request.POST.get("end_period_id")
+    periods = _select_timesheet_periods(range_type, start_period_id, end_period_id)
+    if not periods:
+        messages.warning(request, "Please select a valid range to export.")
+        return redirect("exports:dashboard")
 
     export_type = request.POST.get("export_type", "xlsx")  # xlsx, pdf, pack, all
 
     # Get all approved timesheets for this period
     timesheets = Timesheet.objects.filter(
-        period=period,
+        period__in=periods,
         status=Timesheet.Status.APPROVED
     ).select_related("employee", "employee__profile").order_by(
         "employee__profile__seniority_order", "employee__last_name"
@@ -90,9 +143,9 @@ def generate_timesheet_exports(request):
             ExportJob.objects.create(
                 export_type=ExportJob.ExportType.TIMESHEET_XLSX,
                 status=ExportJob.Status.COMPLETED,
-                year=period.year,
-                month=period.month,
-                half=period.half,
+                year=ts.period.year,
+                month=ts.period.month,
+                half=ts.period.half,
                 employee=ts.employee,
                 filename=os.path.basename(xlsx_path),
                 created_by=request.user,
@@ -111,18 +164,20 @@ def generate_timesheet_exports(request):
         try:
             pdf_files = [f for f in generated_files if str(f).endswith(".pdf")]
             if pdf_files:
+                first_period = periods[0]
+                last_period = periods[-1]
                 pack_path = os.path.join(
                     settings.EXPORT_ROOT,
-                    f"timesheets_{period.year}_{period.month:02d}_{period.half}_pack.pdf"
+                    f"timesheets_{first_period.year}_{first_period.month:02d}_{first_period.half}_to_{last_period.year}_{last_period.month:02d}_{last_period.half}_pack.pdf"
                 )
                 merge_pdfs(pdf_files, pack_path)
 
                 ExportJob.objects.create(
                     export_type=ExportJob.ExportType.TIMESHEET_PACK,
                     status=ExportJob.Status.COMPLETED,
-                    year=period.year,
-                    month=period.month,
-                    half=period.half,
+                    year=first_period.year,
+                    month=first_period.month,
+                    half=first_period.half,
                     filename=os.path.basename(pack_path),
                     created_by=request.user,
                     completed_at=timezone.now(),
@@ -143,15 +198,20 @@ def generate_timesheet_exports(request):
 @require_POST
 def generate_expense_exports(request):
     """Generate expense exports for a month."""
-    month_id = request.POST.get("month_id")
-    month = get_object_or_404(ExpenseMonth, pk=month_id)
+    range_type = request.POST.get("range_type", "current_month")
+    start_month_id = request.POST.get("start_month_id")
+    end_month_id = request.POST.get("end_month_id")
+    months = _select_expense_months(range_type, start_month_id, end_month_id)
+    if not months:
+        messages.warning(request, "Please select a valid range to export.")
+        return redirect("exports:dashboard")
 
     export_type = request.POST.get("export_type", "xlsx")
     sort_by = request.POST.get("sort_by", "seniority")  # seniority or alpha
 
     # Get all approved expense reports
     reports = ExpenseReport.objects.filter(
-        month=month,
+        month__in=months,
         status=ExpenseReport.Status.APPROVED
     ).select_related("employee", "employee__profile")
 
@@ -175,8 +235,8 @@ def generate_expense_exports(request):
             ExportJob.objects.create(
                 export_type=ExportJob.ExportType.EXPENSE_XLSX,
                 status=ExportJob.Status.COMPLETED,
-                year=month.year,
-                month=month.month,
+                year=report.month.year,
+                month=report.month.month,
                 employee=report.employee,
                 filename=os.path.basename(xlsx_path),
                 created_by=request.user,
