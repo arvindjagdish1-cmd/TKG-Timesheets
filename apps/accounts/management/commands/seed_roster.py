@@ -73,7 +73,8 @@ class Command(BaseCommand):
         updated = 0
 
         initials_taken = set(
-            EmployeeProfile.objects.exclude(initials="").values_list("initials", flat=True)
+            EmployeeProfile.objects.exclude(initials="").exclude(initials__isnull=True)
+            .values_list("initials", flat=True)
         )
 
         for email, first_name, last_name, title in ROSTER:

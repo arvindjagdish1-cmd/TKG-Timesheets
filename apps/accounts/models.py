@@ -116,6 +116,7 @@ class EmployeeProfile(models.Model):
         "initials",
         max_length=10,
         blank=True,
+        null=True,
         unique=True,
         help_text="Unique initials used in partner reporting.",
     )
