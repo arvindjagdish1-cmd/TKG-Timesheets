@@ -52,7 +52,7 @@ class DomainRestrictedSocialAccountAdapter(DefaultSocialAccountAdapter):
         # Normalize stored email
         sociallogin.user.email = email
 
-    def authentication_error(
+    def on_authentication_error(
         self,
         request,
         provider_id,
@@ -67,7 +67,7 @@ class DomainRestrictedSocialAccountAdapter(DefaultSocialAccountAdapter):
             exception,
             extra_context,
         )
-        return super().authentication_error(
+        return super().on_authentication_error(
             request,
             provider_id,
             error=error,
