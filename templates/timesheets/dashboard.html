@@ -305,7 +305,7 @@
                                 <td>
                                     <span class="badge-status badge-{{ ts.status|lower }}">{{ ts.get_status_display }}</span>
                                 </td>
-                                <td class="text-muted">{{ ts.submitted_at|date:"M j, Y"|default:"Not submitted" }}</td>
+                                <td class="text-secondary">{{ ts.submitted_at|date:"M j, Y"|default:"Not submitted" }}</td>
                                 <td class="text-end" style="font-family: var(--font-mono); font-weight: 500;">
                                     {{ ts.total_hours|floatformat:1 }} hrs
                                 </td>
@@ -338,7 +338,7 @@
                                 <td>
                                     <span class="badge-status badge-{{ er.status|lower }}">{{ er.get_status_display }}</span>
                                 </td>
-                                <td class="text-muted">{{ er.submitted_at|date:"M j, Y"|default:"Not submitted" }}</td>
+                                <td class="text-secondary">{{ er.submitted_at|date:"M j, Y"|default:"Not submitted" }}</td>
                                 <td class="text-end" style="font-family: var(--font-mono); font-weight: 500;">
                                     ${{ er.grand_total|floatformat:2 }}
                                 </td>
