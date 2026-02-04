@@ -265,6 +265,11 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
+        "apps.accounts.adapters": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
         "apps": {
             "handlers": ["console"],
             "level": "DEBUG" if DEBUG else "INFO",
