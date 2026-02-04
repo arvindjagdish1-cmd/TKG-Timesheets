@@ -115,6 +115,10 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
+
+MEDIA_URL = "/media/"
+MEDIA_ROOT = env("MEDIA_ROOT", default=str(BASE_DIR / "media"))
+
 STORAGES = {
     "default": {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
@@ -125,9 +129,6 @@ STORAGES = {
     },
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
 }
-
-MEDIA_URL = "/media/"
-MEDIA_ROOT = env("MEDIA_ROOT", default=str(BASE_DIR / "media"))
 
 EXPORT_ROOT = env("EXPORT_ROOT", default=str(BASE_DIR / "exports"))
 TIMESHEET_TEMPLATE_PATH = env("TIMESHEET_TEMPLATE_PATH", default=str(BASE_DIR / "apps/exports/templates/Template TIMESHEET.xlsx"))
