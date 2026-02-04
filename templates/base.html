@@ -26,7 +26,7 @@
             
             --ks-text-primary: #ffffff;
             --ks-text-secondary: #d1d5db;
-            --ks-text-muted: #9ca3af;
+            --ks-text-muted: #b3bac5;
             
             --ks-border: #2e2e2e;
             --ks-border-light: #3a3a3a;
@@ -277,6 +277,7 @@
             padding: 1rem 1.25rem;
             font-weight: 600;
             font-size: 0.9375rem;
+            color: var(--ks-text-primary);
         }
 
         .card-body {
@@ -713,7 +714,7 @@
                     {% endif %}
                 </div>
                 <div class="sidebar-user-info">
-                    <div class="user-name">{{ user.get_full_name|default:user.email }}</div>
+                    <div class="user-name">{{ user.first_name|default:user.get_full_name|default:user.email }}</div>
                     <div class="user-email">
                         {% if user.profile_or_none %}
                             {{ user.profile_or_none.title|default:"Employee" }}

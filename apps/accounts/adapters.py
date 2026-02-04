@@ -1,7 +1,7 @@
 import logging
 
 from allauth.account.utils import perform_login
-from allauth.exceptions import ImmediateHttpResponse
+from allauth.core.exceptions import ImmediateHttpResponse
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
@@ -55,6 +55,9 @@ class DomainRestrictedSocialAccountAdapter(DefaultSocialAccountAdapter):
 
         # Normalize stored email
         sociallogin.user.email = email
+
+        # Keep basic profile data up to date when possible
+        self._sync_profile_details(existing_user, sociallogin)
 
         # 4) If the user already exists, auto-connect and login
         if not sociallogin.is_existing:
@@ -113,3 +116,47 @@ class DomainRestrictedSocialAccountAdapter(DefaultSocialAccountAdapter):
                 return str(val).strip()
 
         return None
+
+    @staticmethod
+    def _extract_name_parts(sociallogin):
+        extra = getattr(sociallogin.account, "extra_data", {}) or {}
+        first_name = extra.get("given_name") or extra.get("givenName") or ""
+        last_name = extra.get("family_name") or extra.get("familyName") or ""
+
+        if not first_name and not last_name:
+            display_name = extra.get("name") or extra.get("displayName") or ""
+            if display_name:
+                parts = display_name.strip().split()
+                if parts:
+                    first_name = parts[0]
+                    if len(parts) > 1:
+                        last_name = " ".join(parts[1:])
+
+        return first_name.strip(), last_name.strip()
+
+    @staticmethod
+    def _extract_job_title(sociallogin):
+        extra = getattr(sociallogin.account, "extra_data", {}) or {}
+        title = extra.get("jobTitle") or extra.get("job_title") or ""
+        return str(title).strip()
+
+    def _sync_profile_details(self, user, sociallogin):
+        first_name, last_name = self._extract_name_parts(sociallogin)
+        updated = False
+
+        if first_name and not user.first_name:
+            user.first_name = first_name
+            updated = True
+        if last_name and not user.last_name:
+            user.last_name = last_name
+            updated = True
+
+        if updated:
+            user.save(update_fields=["first_name", "last_name"])
+
+        profile = getattr(user, "profile_or_none", None)
+        if profile and not profile.title:
+            job_title = self._extract_job_title(sociallogin)
+            if job_title:
+                profile.title = job_title
+                profile.save(update_fields=["title"])

@@ -159,7 +159,7 @@
 {% block content %}
 <!-- Welcome Section -->
 <div class="welcome-section fade-in">
-    <h1>Welcome back, {{ user.get_full_name|default:user.email }}</h1>
+    <h1>Welcome back, {{ user.first_name|default:user.get_full_name|default:user.email }}</h1>
     <p>Manage your timesheets and expenses from your personal dashboard</p>
     <div class="current-date">
         <i class="bi bi-calendar3 me-1"></i>{% now "l, F j, Y" %}
