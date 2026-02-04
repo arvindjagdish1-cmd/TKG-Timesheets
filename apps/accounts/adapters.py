@@ -52,6 +52,29 @@ class DomainRestrictedSocialAccountAdapter(DefaultSocialAccountAdapter):
         # Normalize stored email
         sociallogin.user.email = email
 
+    def authentication_error(
+        self,
+        request,
+        provider_id,
+        error=None,
+        exception=None,
+        extra_context=None,
+    ):
+        logger.warning(
+            "Microsoft authentication error: provider=%s error=%s exception=%s context=%s",
+            provider_id,
+            error,
+            exception,
+            extra_context,
+        )
+        return super().authentication_error(
+            request,
+            provider_id,
+            error=error,
+            exception=exception,
+            extra_context=extra_context,
+        )
+
     @staticmethod
     def _extract_email(sociallogin):
         extra = getattr(sociallogin.account, "extra_data", {}) or {}
