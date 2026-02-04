@@ -829,11 +829,18 @@ def payroll_dashboard(request):
             "status": status,
         })
 
+    total_expenses = sum(
+        Decimal(str(item.get("total", 0))) for item in expense_summary
+    )
+    report_count = sum(1 for item in expense_summary if item.get("upload"))
+
     context = {
         "month_options": months,
         "selected_month": f"{year}-{month:02d}",
         "selected_month_label": _month_label(year, month),
         "expense_summary": expense_summary,
+        "total_expenses": total_expenses,
+        "report_count": report_count,
     }
     return render(request, "reviews/payroll/dashboard.html", context)
 

@@ -113,13 +113,10 @@
                     <tr style="background: var(--ks-bg-tertiary);">
                         <td class="fw-bold">Total</td>
                         <td class="text-end fw-bold" style="font-family: var(--font-mono);">
-                            {% widthratio 0 1 1 as total %}
-                            ${% for item in expense_summary %}{% with total=item.total|add:total %}{% endwith %}{% endfor %}
-                            {% with grand=0 %}
-                            {% for item in expense_summary %}
-                            {% endfor %}
-                            {% endwith %}
-                            {{ expense_summary|length }} reports
+                            ${{ total_expenses|floatformat:2 }}
+                            <div class="text-muted fw-normal" style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;">
+                                {{ report_count }} reports
+                            </div>
                         </td>
                         <td></td>
                         <td></td>
