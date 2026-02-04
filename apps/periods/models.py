@@ -103,9 +103,62 @@ class TimesheetPeriod(models.Model):
         today = timezone.now().date()
         day = today.day
         half = cls.Half.FIRST if day <= 15 else cls.Half.SECOND
-        return cls.objects.filter(
-            year=today.year, month=today.month, half=half
-        ).first()
+        cls.ensure_month(today.year, today.month)
+        return cls.objects.filter(year=today.year, month=today.month, half=half).first()
+
+    @classmethod
+    def ensure_month(cls, year, month, due_offset=3, reminder_offset=2):
+        """Ensure both half-month periods and expense month exist."""
+        from calendar import monthrange
+        from datetime import date
+
+        last_day = monthrange(year, month)[1]
+
+        first_start = date(year, month, 1)
+        first_end = date(year, month, 15)
+        first_due = date(year, month, 15 + due_offset)
+        first_reminder = date(year, month, 15 + due_offset - reminder_offset)
+
+        if first_due.day > last_day:
+            if month == 12:
+                first_due = date(year + 1, 1, first_due.day - last_day)
+            else:
+                first_due = date(year, month + 1, first_due.day - last_day)
+
+        cls.objects.get_or_create(
+            year=year,
+            month=month,
+            half=cls.Half.FIRST,
+            defaults={
+                "start_date": first_start,
+                "end_date": first_end,
+                "due_date": first_due,
+                "reminder_date": first_reminder,
+            },
+        )
+
+        second_start = date(year, month, 16)
+        second_end = date(year, month, last_day)
+        if month == 12:
+            second_due = date(year + 1, 1, due_offset)
+            second_reminder = date(year + 1, 1, max(1, due_offset - reminder_offset))
+        else:
+            second_due = date(year, month + 1, due_offset)
+            second_reminder = date(year, month + 1, max(1, due_offset - reminder_offset))
+
+        cls.objects.get_or_create(
+            year=year,
+            month=month,
+            half=cls.Half.SECOND,
+            defaults={
+                "start_date": second_start,
+                "end_date": second_end,
+                "due_date": second_due,
+                "reminder_date": second_reminder,
+            },
+        )
+
+        ExpenseMonth.ensure_month(year, month, due_offset=due_offset)
 
 
 class ExpenseMonth(models.Model):
@@ -197,7 +250,35 @@ class ExpenseMonth(models.Model):
     def get_current_month(cls):
         """Get the expense month for today's date."""
         today = timezone.now().date()
+        cls.ensure_month(today.year, today.month)
         return cls.objects.filter(year=today.year, month=today.month).first()
+
+    @classmethod
+    def ensure_month(cls, year, month, due_offset=3):
+        from calendar import monthrange
+        from datetime import date
+
+        last_day = monthrange(year, month)[1]
+        expense_start = date(year, month, 1)
+        expense_end = date(year, month, last_day)
+
+        if month == 12:
+            expense_due = date(year + 1, 1, due_offset + 2)
+            expense_reminder = date(year + 1, 1, max(1, due_offset))
+        else:
+            expense_due = date(year, month + 1, due_offset + 2)
+            expense_reminder = date(year, month + 1, max(1, due_offset))
+
+        cls.objects.get_or_create(
+            year=year,
+            month=month,
+            defaults={
+                "start_date": expense_start,
+                "end_date": expense_end,
+                "due_date": expense_due,
+                "reminder_date": expense_reminder,
+            },
+        )
 
     @property
     def first_timesheet_period(self):

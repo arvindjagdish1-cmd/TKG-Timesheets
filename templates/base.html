@@ -25,8 +25,8 @@
             --ks-bg-hover: #2a2a2a;
             
             --ks-text-primary: #ffffff;
-            --ks-text-secondary: #a0a0a0;
-            --ks-text-muted: #6b6b6b;
+            --ks-text-secondary: #d1d5db;
+            --ks-text-muted: #9ca3af;
             
             --ks-border: #2e2e2e;
             --ks-border-light: #3a3a3a;
@@ -670,13 +670,13 @@
             </a>
 
             <div class="nav-section">Time</div>
-            <a href="{% url 'timesheets:timesheet_list' %}" class="nav-link {% if 'timesheet' in request.path and 'review' not in request.path %}active{% endif %}">
-                <i class="bi bi-clock-history"></i> My Timesheets
+            <a href="{% url 'timesheets:upload_timesheet' %}" class="nav-link {% if 'upload' in request.path %}active{% endif %}">
+                <i class="bi bi-cloud-arrow-up"></i> Upload Timesheet
             </a>
 
-            <div class="nav-section">Expenses</div>
-            <a href="{% url 'expenses:expense_list' %}" class="nav-link {% if 'expense' in request.path and 'review' not in request.path %}active{% endif %}">
-                <i class="bi bi-receipt-cutoff"></i> My Expenses
+            <div class="nav-section">Submissions</div>
+            <a href="{% url 'timesheets:upload_timesheet' %}" class="nav-link {% if 'upload' in request.path %}active{% endif %}">
+                <i class="bi bi-file-earmark-spreadsheet"></i> Uploads
             </a>
 
             {% if user.is_staff or user.groups.filter %}
@@ -706,11 +706,21 @@
         <div class="sidebar-footer">
             <div class="sidebar-user">
                 <div class="sidebar-user-avatar">
-                    {{ user.first_name|slice:":1"|default:user.email|slice:":1"|upper }}
+                    {% if user.profile_or_none and user.profile_or_none.initials %}
+                        {{ user.profile_or_none.initials|upper }}
+                    {% else %}
+                        {{ user.first_name|slice:":1"|upper }}{{ user.last_name|slice:":1"|upper }}
+                    {% endif %}
                 </div>
                 <div class="sidebar-user-info">
                     <div class="user-name">{{ user.get_full_name|default:user.email }}</div>
-                    <div class="user-email">{{ user.email }}</div>
+                    <div class="user-email">
+                        {% if user.profile_or_none %}
+                            {{ user.profile_or_none.title|default:"Employee" }}
+                        {% else %}
+                            Employee
+                        {% endif %}
+                    </div>
                 </div>
             </div>
             <a href="{% url 'account_logout' %}" class="btn-signout">

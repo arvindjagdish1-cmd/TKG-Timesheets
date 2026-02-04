@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load timesheet_tags %}
 
-{% block title %}Daily Summary - {{ period.display_name }} - Keystone{% endblock %}
+{% block title %}Daily Summary - {{ month_label }} - Keystone{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -57,46 +57,13 @@
         background: var(--ks-danger-subtle) !important;
         color: var(--ks-danger) !important;
     }
-    .excessive-hours {
+    .high-hours {
         background: var(--ks-danger-subtle) !important;
         color: var(--ks-danger) !important;
     }
     .total-cell {
         font-weight: 600;
         background: var(--ks-bg-tertiary);
-    }
-    .has-flag {
-        position: relative;
-    }
-    .has-flag::after {
-        content: '';
-        position: absolute;
-        top: 4px;
-        right: 4px;
-        width: 6px;
-        height: 6px;
-        background: var(--ks-danger);
-        border-radius: 50%;
-    }
-    .flag-legend {
-        display: flex;
-        gap: 1.5rem;
-        flex-wrap: wrap;
-        font-size: 0.8125rem;
-    }
-    .flag-legend-item {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-    .flag-legend-item .flag-color {
-        width: 16px;
-        height: 16px;
-        border-radius: 4px;
-    }
-    .scroll-hint {
-        color: var(--ks-text-muted);
-        font-size: 0.75rem;
     }
 </style>
 {% endblock %}
@@ -111,111 +78,68 @@
             </ol>
         </nav>
         <h1>Daily Hours Summary</h1>
-        <p class="text-muted mb-0">{{ period.display_name }}</p>
+        <p class="text-muted mb-0">{{ month_label }}</p>
     </div>
     <div class="d-flex gap-2">
-        <a href="{% url 'reviews:category_summary_period' period.pk %}" class="btn btn-secondary">
+        <a href="{% url 'reviews:category_summary' %}?month={{ month_param }}" class="btn btn-secondary">
             <i class="bi bi-grid-3x3 me-2"></i>Category View
         </a>
     </div>
 </div>
 
-<!-- Period Selector & Legend -->
 <div class="card mb-4">
     <div class="card-body">
-        <div class="row align-items-center">
+        <form method="get" class="row g-3 align-items-end">
             <div class="col-md-4">
-                <form method="get" action="{% url 'reviews:daily_summary' %}">
-                    <div class="d-flex gap-2">
-                        <select name="period" class="form-select form-select-sm" style="max-width: 250px;">
-                            {% for p in recent_periods %}
-                            <option value="{{ p.pk }}" {% if p.pk == period.pk %}selected{% endif %}>
-                                {{ p.display_name }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                        <button type="submit" class="btn btn-sm btn-primary">
-                            <i class="bi bi-arrow-right"></i>
-                        </button>
-                    </div>
-                </form>
+                <label class="form-label">Month</label>
+                <select name="month" class="form-select">
+                    {% for year, month in month_options %}
+                    {% with value=year|stringformat:"04d"|add:"-"|add:month|stringformat:"02d" %}
+                    <option value="{{ value }}" {% if value == month_param %}selected{% endif %}>
+                        {{ year }}-{{ month|stringformat:"02d" }}
+                    </option>
+                    {% endwith %}
+                    {% endfor %}
+                </select>
             </div>
-            <div class="col-md-8">
-                <div class="flag-legend justify-content-end">
-                    <div class="flag-legend-item">
-                        <div class="flag-color" style="background: var(--ks-warning-subtle); border: 1px solid var(--ks-warning);"></div>
-                        <span>Incomplete (&lt;8 hrs)</span>
-                    </div>
-                    <div class="flag-legend-item">
-                        <div class="flag-color" style="background: var(--ks-danger-subtle); border: 1px solid var(--ks-danger);"></div>
-                        <span>Missing Timesheet</span>
-                    </div>
-                    <div class="flag-legend-item">
-                        <div class="flag-color" style="background: var(--ks-bg-secondary); border: 1px solid var(--ks-border);"></div>
-                        <span>Weekend</span>
-                    </div>
-                </div>
+            <div class="col-md-4">
+                <button class="btn btn-primary">Apply</button>
             </div>
-        </div>
+        </form>
     </div>
 </div>
 
-<!-- Summary Table -->
-<div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <span><i class="bi bi-table me-2"></i>Hours by Day</span>
-        <span class="scroll-hint"><i class="bi bi-arrows-expand me-1"></i>Scroll horizontally to see all days</span>
-    </div>
+<div class="card mb-4">
+    <div class="card-header">Period One (Days 1–15)</div>
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table summary-table mb-0">
                 <thead>
                     <tr>
                         <th class="employee-header" style="min-width: 180px;">Employee</th>
-                        {% for date in dates %}
+                        {% for date in first_dates %}
                         <th class="day-header {% if date.weekday >= 5 %}weekend{% endif %}">
                             <div class="day-name">{{ date|date:"D" }}</div>
                             <div class="day-num">{{ date|date:"j" }}</div>
                         </th>
                         {% endfor %}
                         <th class="total-cell">Total</th>
-                        <th>Status</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for data in employee_data %}
-                    <tr class="{% if data.has_flags %}has-flag{% endif %}">
-                        <td class="employee-cell {% if data.missing %}missing-ts{% endif %}">
-                            {{ data.employee.get_full_name|default:data.employee.email }}
-                            {% if data.missing %}
-                            <i class="bi bi-exclamation-circle ms-1" title="Missing timesheet"></i>
-                            {% endif %}
+                    {% for row in first_rows %}
+                    <tr>
+                        <td class="employee-cell {% if row.missing %}missing-ts{% endif %}">
+                            {{ row.employee.get_full_name|default:row.employee.email }}
                         </td>
-                        {% for date in dates %}
-                        {% with hours=data.daily_hours|get_item:date %}
-                        <td class="{% if date.weekday >= 5 %}weekend{% elif data.missing %}missing-ts{% elif date.weekday < 5 and hours < 8 and hours > 0 %}incomplete{% elif date.weekday < 5 and hours == 0 %}incomplete{% endif %}">
-                            {% if hours > 0 %}{{ hours|floatformat:1 }}{% else %}-{% endif %}
+                        {% for date in first_dates %}
+                        {% with value=row.daily_totals|get_item:date %}
+                        <td class="{% if date.weekday >= 5 %}weekend{% elif row.missing %}missing-ts{% elif date in row.flags.incomplete %}incomplete{% elif date in row.flags.high_hours %}high-hours{% endif %}">
+                            {% if value is not None %}{{ value|floatformat:1 }}{% else %}-{% endif %}
                         </td>
                         {% endwith %}
                         {% endfor %}
-                        <td class="total-cell">{{ data.total_hours|floatformat:1 }}</td>
-                        <td>
-                            {% if data.missing %}
-                            <span class="badge-status badge-returned">Missing</span>
-                            {% elif data.has_flags %}
-                            <span class="badge-status badge-submitted" title="{{ data.flags.incomplete_days|length }} incomplete days">
-                                <i class="bi bi-flag"></i> {{ data.flags.incomplete_days|length }} flags
-                            </span>
-                            {% else %}
-                            <span class="badge-status badge-approved">OK</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="{{ dates|length|add:3 }}" class="text-center py-4 text-muted">
-                            No employees found.
-                        </td>
+                        <td class="total-cell">{{ row.total_hours|floatformat:1 }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -224,45 +148,42 @@
     </div>
 </div>
 
-<!-- Flag Details -->
-{% for data in employee_data %}
-{% if data.has_flags and not data.missing %}
-<div class="card mt-3">
-    <div class="card-header">
-        <i class="bi bi-flag text-warning me-2"></i>{{ data.employee.get_full_name }}: Flag Details
-    </div>
-    <div class="card-body">
-        {% if data.flags.incomplete_days %}
-        <div class="mb-3">
-            <strong class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Incomplete Days:</strong>
-            <span class="text-muted ms-2">
-                {% for flag in data.flags.incomplete_days %}
-                {{ flag.date|date:"M j" }} ({{ flag.hours|floatformat:1 }}h){% if not forloop.last %}, {% endif %}
-                {% endfor %}
-            </span>
+<div class="card">
+    <div class="card-header">Period Two (Days 16–End)</div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table summary-table mb-0">
+                <thead>
+                    <tr>
+                        <th class="employee-header" style="min-width: 180px;">Employee</th>
+                        {% for date in second_dates %}
+                        <th class="day-header {% if date.weekday >= 5 %}weekend{% endif %}">
+                            <div class="day-name">{{ date|date:"D" }}</div>
+                            <div class="day-num">{{ date|date:"j" }}</div>
+                        </th>
+                        {% endfor %}
+                        <th class="total-cell">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in second_rows %}
+                    <tr>
+                        <td class="employee-cell {% if row.missing %}missing-ts{% endif %}">
+                            {{ row.employee.get_full_name|default:row.employee.email }}
+                        </td>
+                        {% for date in second_dates %}
+                        {% with value=row.daily_totals|get_item:date %}
+                        <td class="{% if date.weekday >= 5 %}weekend{% elif row.missing %}missing-ts{% elif date in row.flags.incomplete %}incomplete{% elif date in row.flags.high_hours %}high-hours{% endif %}">
+                            {% if value is not None %}{{ value|floatformat:1 }}{% else %}-{% endif %}
+                        </td>
+                        {% endwith %}
+                        {% endfor %}
+                        <td class="total-cell">{{ row.total_hours|floatformat:1 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
-        {% endif %}
-        
-        {% if data.flags.excessive_hours_weeks %}
-        <div>
-            <strong class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Excessive Hours Weeks:</strong>
-            {% for flag in data.flags.excessive_hours_weeks %}
-            <div class="text-muted ms-4 mt-1">
-                Week {{ flag.week.1 }}: {{ flag.count }} days with >10 hours
-                ({% for d in flag.dates %}{{ d|date:"M j" }}{% if not forloop.last %}, {% endif %}{% endfor %})
-            </div>
-            {% endfor %}
-        </div>
-        {% endif %}
     </div>
 </div>
-{% endif %}
-{% endfor %}
-{% endblock %}
-
-{% block extra_js %}
-<script>
-// Custom template filter workaround - dictionary lookup
-// This won't work directly, need to handle in Python view
-</script>
 {% endblock %}

@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Payroll Export - Keystone Time & Expense{% endblock %}
+{% block title %}Partner - Keystone Time & Expense{% endblock %}
 
 {% block content %}
 <div class="page-header">
     <div>
-        <h1>Payroll Export</h1>
+        <h1>Partner</h1>
         <p class="text-muted mb-0">Export expense data for payroll processing</p>
     </div>
 </div>
@@ -13,31 +13,36 @@
 <!-- Month Selector -->
 <div class="card mb-4">
     <div class="card-header">
-        <i class="bi bi-calendar-month me-2"></i>Select Expense Month
+        <i class="bi bi-calendar-month me-2"></i>Select Month
     </div>
     <div class="card-body">
         <form method="get" class="row g-3 align-items-end">
             <div class="col-md-6">
-                <label class="form-label">Expense Month</label>
+                <label class="form-label">Month</label>
                 <select name="month" class="form-select" onchange="this.form.submit()">
-                    <option value="">-- Select Month --</option>
-                    {% for month in recent_months %}
-                    <option value="{{ month.pk }}" {% if selected_month.pk == month.pk %}selected{% endif %}>
-                        {{ month.display_name }}
-                        {% if month.pk == current_month.pk %}(Current){% endif %}
+                    {% for year, month in month_options %}
+                    {% with value=year|stringformat:"04d"|add:"-"|add:month|stringformat:"02d" %}
+                    <option value="{{ value }}" {% if value == selected_month %}selected{% endif %}>
+                        {{ year }}-{{ month|stringformat:"02d" }}
                     </option>
+                    {% endwith %}
                     {% endfor %}
                 </select>
             </div>
             {% if selected_month %}
             <div class="col-md-6">
                 <div class="d-flex gap-2">
-                    <a href="{% url 'reviews:payroll_export' selected_month.pk %}?format=xlsx" class="btn btn-success">
+                    {% with year=selected_month|slice:":4" month=selected_month|slice:"5:" %}
+                    <a href="{% url 'reviews:payroll_export' year month %}?format=xlsx" class="btn btn-success">
                         <i class="bi bi-file-earmark-excel me-2"></i>Download Excel
                     </a>
-                    <a href="{% url 'reviews:payroll_export' selected_month.pk %}?format=csv" class="btn btn-secondary">
+                    <a href="{% url 'reviews:payroll_export' year month %}?format=csv" class="btn btn-secondary">
                         <i class="bi bi-filetype-csv me-2"></i>Download CSV
                     </a>
+                    <a href="{% url 'reviews:payroll_export' year month %}?format=flags" class="btn btn-secondary">
+                        <i class="bi bi-flag me-2"></i>Download Flags
+                    </a>
+                    {% endwith %}
                 </div>
             </div>
             {% endif %}
@@ -49,7 +54,7 @@
 <!-- Expense Summary -->
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
-        <span><i class="bi bi-cash-stack me-2"></i>Expense Summary - {{ selected_month.display_name }}</span>
+        <span><i class="bi bi-cash-stack me-2"></i>Expense Summary - {{ selected_month_label }}</span>
         <span class="text-muted small">{{ expense_summary|length }} employees</span>
     </div>
     <div class="card-body p-0">
@@ -87,8 +92,8 @@
                             {% endif %}
                         </td>
                         <td class="text-center">
-                            {% if item.report %}
-                            <a href="{% url 'reviews:review_expense' item.report.pk %}" class="btn btn-sm btn-outline-primary">
+                            {% if item.upload %}
+                            <a href="{% url 'timesheets:upload_summary' item.upload.pk %}" class="btn btn-sm btn-outline-primary">
                                 <i class="bi bi-eye"></i>
                             </a>
                             {% else %}
@@ -131,32 +136,9 @@
         <i class="bi bi-info-circle me-2"></i>Export Information
     </div>
     <div class="card-body">
-        <div class="row">
-            <div class="col-md-6">
-                <h6 class="text-muted mb-2">Excel Export</h6>
-                <p class="small text-muted">
-                    The Excel export includes all expense categories as rows and employees as columns.
-                    This matches the format needed for Paychex upload. Categories include:
-                </p>
-                <ul class="small text-muted">
-                    <li>All expense categories (meals, travel, office supplies, etc.)</li>
-                    <li>Mileage reimbursements (separate row)</li>
-                    <li>Grand total per employee</li>
-                </ul>
-            </div>
-            <div class="col-md-6">
-                <h6 class="text-muted mb-2">CSV Export</h6>
-                <p class="small text-muted">
-                    The CSV export provides the same data in comma-separated format
-                    for use in other systems or spreadsheet applications.
-                </p>
-                <div class="alert alert-info small mt-3">
-                    <i class="bi bi-lightbulb me-2"></i>
-                    <strong>Tip:</strong> Use the Excel format for direct import into Paychex.
-                    The CSV format is useful for custom processing or backup.
-                </div>
-            </div>
-        </div>
+        <p class="text-muted mb-0">
+            Exports match the D–AS column layout in your payroll workbook. Marketing expenses are allocated by charge code.
+        </p>
     </div>
 </div>
 {% else %}
@@ -164,7 +146,7 @@
     <div class="card-body text-center py-5">
         <i class="bi bi-calendar-month h1 text-muted d-block mb-3"></i>
         <h5>Select a Month</h5>
-        <p class="text-muted">Please select an expense month above to view summary and export options.</p>
+        <p class="text-muted">Please select a month above to view summary and export options.</p>
     </div>
 </div>
 {% endif %}

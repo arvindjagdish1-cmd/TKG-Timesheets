@@ -61,25 +61,8 @@
                 <span>Sign in with Microsoft</span>
             </a>
 
-            <!-- Divider -->
-            <div class="divider">
-                <span>or</span>
-            </div>
-
-            <!-- Sign Up Button -->
-            <a href="{% provider_login_url 'microsoft' %}?signup=true" class="btn-login btn-signup">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
-                    <circle cx="9" cy="7" r="4"></circle>
-                    <line x1="19" y1="8" x2="19" y2="14"></line>
-                    <line x1="22" y1="11" x2="16" y2="11"></line>
-                </svg>
-                <span>First time signing in? Sign up</span>
-            </a>
-
             <p class="help-text">
-                Use your company Microsoft account to access the portal.
-                <br>New users will be prompted to select their role after signing in.
+                Access is limited to approved @thekeystonegroup.com accounts.
             </p>
         </div>
 
@@ -235,27 +218,6 @@
         border-color: #4b5563;
         transform: translateY(-2px);
         text-decoration: none;
-    }
-
-    /* Divider */
-    .divider {
-        display: flex;
-        align-items: center;
-        margin: 1.5rem 0;
-        color: #4b5563;
-        font-size: 0.875rem;
-    }
-
-    .divider::before,
-    .divider::after {
-        content: '';
-        flex: 1;
-        height: 1px;
-        background: #374151;
-    }
-
-    .divider span {
-        padding: 0 1rem;
     }
 
     /* Help Text */

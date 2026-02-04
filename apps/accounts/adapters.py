@@ -1,6 +1,7 @@
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
+from django.contrib.auth import get_user_model
 
 
 class DomainRestrictedSocialAccountAdapter(DefaultSocialAccountAdapter):
@@ -34,6 +35,11 @@ class DomainRestrictedSocialAccountAdapter(DefaultSocialAccountAdapter):
             allowed = {t.strip() for t in allowed_tenants if t.strip()}
             if not tid or tid not in allowed:
                 raise PermissionDenied("This tenant is not allowed to access this application.")
+
+        # 3) Roster allowlist (must exist in Users table)
+        User = get_user_model()
+        if not User.objects.filter(email=email, is_active=True).exists():
+            raise PermissionDenied("This account is not on the approved roster.")
 
         # Normalize stored email
         sociallogin.user.email = email

@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}Office Manager Dashboard - Keystone{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-start">
+    <div>
+        <h1><i class="bi bi-clipboard2-check me-2" style="opacity: 0.7;"></i>Office Manager Dashboard</h1>
+        <p class="text-muted mb-0">{{ selected_month_label }}</p>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">Month</label>
+                <select name="month" class="form-select">
+                    {% for year, month in month_options %}
+                    {% with value=year|stringformat:"04d"|add:"-"|add:month|stringformat:"02d" %}
+                    <option value="{{ value }}" {% if value == selected_month %}selected{% endif %}>
+                        {{ year }}-{{ month|stringformat:"02d" }}
+                    </option>
+                    {% endwith %}
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Status</label>
+                <select name="status" class="form-select">
+                    {% for status in "ALL,DRAFT,SUBMITTED,RETURNED,APPROVED,MISSING".split(",") %}
+                    <option value="{{ status }}" {% if status == status_filter %}selected{% endif %}>
+                        {{ status|title }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <button class="btn btn-primary">
+                    <i class="bi bi-filter me-2"></i>Apply Filters
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-people me-2"></i>Employee Submissions</span>
+        <span class="text-muted small">{{ pending_count }} submitted</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table mb-0">
+                <thead>
+                    <tr>
+                        <th>Employee</th>
+                        <th>Initials</th>
+                        <th>Status</th>
+                        <th class="text-end">Total Hours</th>
+                        <th class="text-end">Total Expenses</th>
+                        <th>Error State</th>
+                        <th class="text-end">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr>
+                        <td>{{ row.employee.get_full_name|default:row.employee.email }}</td>
+                        <td>
+                            {% if row.employee.profile_or_none %}
+                                {{ row.employee.profile_or_none.initials|default:"-" }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if row.status == "MISSING" %}
+                            <span class="badge-status badge-returned">Missing</span>
+                            {% else %}
+                            <span class="badge-status badge-{{ row.status|lower }}">{{ row.status|title }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">{{ row.total_hours|floatformat:1 }}</td>
+                        <td class="text-end">${{ row.total_expenses|floatformat:2 }}</td>
+                        <td>
+                            {% if row.error_state == "blocking" %}
+                            <span class="badge-status badge-returned">Blocking</span>
+                            {% elif row.error_state == "warning" %}
+                            <span class="badge-status badge-submitted">Warnings</span>
+                            {% elif row.error_state == "missing" %}
+                            <span class="badge-status badge-draft">Missing</span>
+                            {% else %}
+                            <span class="badge-status badge-approved">OK</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if row.upload %}
+                            <a class="btn btn-sm btn-secondary" href="{% url 'reviews:office_employee_detail' row.employee.pk row.upload.year row.upload.month %}">
+                                <i class="bi bi-eye me-1"></i>View
+                            </a>
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center py-4 text-muted">No employees found.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

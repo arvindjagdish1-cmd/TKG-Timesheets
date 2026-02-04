@@ -3,18 +3,21 @@ from decimal import Decimal, InvalidOperation
 import json
 
 from django.contrib.auth.decorators import login_required
+from django.conf import settings
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
-from django.http import HttpResponseForbidden, HttpResponse, JsonResponse
+from django.http import HttpResponseForbidden, HttpResponse, JsonResponse, FileResponse
 from django.utils import timezone
 from django.views.decorators.http import require_POST, require_GET
 from django.db import transaction
 from django.template.loader import render_to_string
 
-from .models import Timesheet, TimesheetLine, TimeEntry, ChargeCode
+from .models import Timesheet, TimesheetLine, TimeEntry, ChargeCode, TimesheetUpload
 from apps.periods.models import TimesheetPeriod, ExpenseMonth
 from apps.expenses.models import ExpenseReport
 from apps.reviews.models import ReviewAction
+from .services.upload_parser import parse_timesheet_workbook
+from .services.upload_validation import validate_parsed_workbook
 
 
 @login_required
@@ -22,10 +25,18 @@ def dashboard(request):
     """Main dashboard showing the employee's current periods and status."""
     user = request.user
     today = timezone.now().date()
+    current_year = today.year
+    current_month = today.month
 
     # Get current periods
     current_ts_period = TimesheetPeriod.get_current_period()
     current_expense_month = ExpenseMonth.get_current_month()
+
+    latest_upload = TimesheetUpload.objects.filter(
+        user=user,
+        year=current_year,
+        month=current_month,
+    ).order_by("-uploaded_at").first()
 
     # Get user's timesheets (current and recent)
     timesheets = Timesheet.objects.filter(employee=user).select_related("period").order_by(
@@ -61,8 +72,116 @@ def dashboard(request):
         "current_ts_period": current_ts_period,
         "current_expense_month": current_expense_month,
         "today": today,
+        "latest_upload": latest_upload,
     }
     return render(request, "timesheets/dashboard.html", context)
+
+
+@login_required
+def upload_timesheet(request):
+    """Upload-first workflow for timesheets and expenses."""
+    user = request.user
+    today = timezone.now().date()
+    latest_upload = TimesheetUpload.objects.filter(
+        user=user, year=today.year, month=today.month
+    ).order_by("-uploaded_at").first()
+
+    if request.method == "POST":
+        upload_file = request.FILES.get("timesheet_file")
+        if not upload_file:
+            messages.error(request, "Please select a file to upload.")
+            return redirect("timesheets:upload_timesheet")
+
+        if not upload_file.name.lower().endswith(".xlsx"):
+            messages.error(request, "Only .xlsx files are accepted.")
+            return redirect("timesheets:upload_timesheet")
+
+        max_mb = getattr(settings, "TIMESHEET_UPLOAD_MAX_MB", 25)
+        if upload_file.size > max_mb * 1024 * 1024:
+            messages.error(request, f"File exceeds the {max_mb} MB limit.")
+            return redirect("timesheets:upload_timesheet")
+
+        file_bytes = upload_file.read()
+        parsed = parse_timesheet_workbook(file_bytes)
+        issues = validate_parsed_workbook(parsed)
+        has_blocking = any(issue["severity"] == "ERROR" for issue in issues)
+
+        year = parsed.get("period", {}).get("year") or today.year
+        month = parsed.get("period", {}).get("month") or today.month
+        template_version = parsed.get("metadata", {}).get("template_version") or ""
+
+        upload_file.seek(0)
+        upload = TimesheetUpload.objects.create(
+            user=user,
+            uploaded_file=upload_file,
+            year=year,
+            month=month,
+            status=TimesheetUpload.Status.DRAFT,
+            parsed_json=parsed,
+            errors_json=issues,
+            has_blocking_errors=has_blocking,
+            source_template_version=template_version,
+        )
+        upload.set_sha256_from_bytes(file_bytes)
+        upload.save(update_fields=["sha256"])
+
+        return redirect("timesheets:upload_summary", pk=upload.pk)
+
+    context = {
+        "latest_upload": latest_upload,
+        "today": today,
+        "TIMESHEET_UPLOAD_MAX_MB": getattr(settings, "TIMESHEET_UPLOAD_MAX_MB", 25),
+    }
+    return render(request, "timesheets/upload.html", context)
+
+
+@login_required
+def upload_summary(request, pk):
+    upload = get_object_or_404(TimesheetUpload, pk=pk)
+    if upload.user != request.user and not request.user.groups.filter(
+        name__in=["office_manager", "managing_partner", "payroll_partner", "accountants"]
+    ).exists() and not request.user.is_superuser:
+        return HttpResponseForbidden("You don't have permission to view this upload.")
+
+    errors = [i for i in upload.errors_json if i.get("severity") == "ERROR"]
+    warnings = [i for i in upload.errors_json if i.get("severity") == "WARN"]
+    summary = upload.parsed_json or {}
+
+    context = {
+        "upload": upload,
+        "summary": summary,
+        "errors": errors,
+        "warnings": warnings,
+    }
+    return render(request, "timesheets/summary.html", context)
+
+
+@login_required
+@require_POST
+def upload_submit(request, pk):
+    upload = get_object_or_404(TimesheetUpload, pk=pk, user=request.user)
+    if upload.has_blocking_errors:
+        messages.error(request, "Fix all blocking issues before submitting.")
+        return redirect("timesheets:upload_summary", pk=pk)
+
+    if upload.status != TimesheetUpload.Status.DRAFT:
+        messages.error(request, "Only drafts can be submitted.")
+        return redirect("timesheets:upload_summary", pk=pk)
+
+    upload.status = TimesheetUpload.Status.SUBMITTED
+    upload.save(update_fields=["status", "updated_at"])
+    messages.success(request, "Upload submitted successfully.")
+    return redirect("timesheets:upload_summary", pk=pk)
+
+
+@login_required
+def upload_download(request, pk):
+    upload = get_object_or_404(TimesheetUpload, pk=pk)
+    if upload.user != request.user and not request.user.groups.filter(
+        name__in=["office_manager", "managing_partner", "payroll_partner"]
+    ).exists() and not request.user.is_superuser:
+        return HttpResponseForbidden("Access denied.")
+    return FileResponse(upload.uploaded_file.open("rb"), as_attachment=True)
 
 
 @login_required

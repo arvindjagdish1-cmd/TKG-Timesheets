@@ -1,0 +1,14 @@
+{% load socialaccount %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Redirecting…</title>
+    {% provider_login_url provider.id process=process scope=scope auth_params=auth_params as provider_url %}
+    <meta http-equiv="refresh" content="0; url={{ provider_url }}">
+</head>
+<body>
+    <p>Redirecting to Microsoft…</p>
+    <p><a href="{{ provider_url }}">Continue</a></p>
+</body>
+</html>

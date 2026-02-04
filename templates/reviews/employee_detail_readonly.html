@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}Employee Summary - Keystone{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="bi bi-person-badge me-2" style="opacity: 0.7;"></i>{{ employee.get_full_name|default:employee.email }}</h1>
+        <p class="text-muted mb-0">Upload for {{ upload.year }}-{{ upload.month|stringformat:"02d" }}</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'timesheets:upload_download' upload.pk %}" class="btn btn-secondary">
+            <i class="bi bi-download me-2"></i>Download Original
+        </a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">Review Comment</div>
+    <div class="card-body">
+        <form method="post" action="{% url 'reviews:office_return_upload' upload.pk %}">
+            {% csrf_token %}
+            <div class="mb-3">
+                <textarea name="comment" class="form-control" rows="3" placeholder="Add a review note (optional)"></textarea>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-danger"><i class="bi bi-arrow-return-left me-2"></i>Return with Comment</button>
+            </div>
+        </form>
+        <form method="post" action="{% url 'reviews:office_approve_upload' upload.pk %}" class="mt-3">
+            {% csrf_token %}
+            <div class="mb-3">
+                <textarea name="comment" class="form-control" rows="3" placeholder="Approval note (optional)"></textarea>
+            </div>
+            <button class="btn btn-success"><i class="bi bi-check2-circle me-2"></i>Approve with Comment</button>
+        </form>
+        {% if upload.reviewer_comment %}
+        <div class="alert alert-info mt-3 mb-0">
+            <strong>Latest Comment:</strong> {{ upload.reviewer_comment }}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="stat-card">
+            <div class="stat-icon" style="background: var(--ks-accent-subtle); color: var(--ks-accent);">
+                <i class="bi bi-clock"></i>
+            </div>
+            <div class="stat-value">{{ summary.time.first_half.total_hours|default:0|floatformat:1 }} hrs</div>
+            <div class="stat-label">First Half Hours</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card">
+            <div class="stat-icon" style="background: var(--ks-accent-subtle); color: var(--ks-accent);">
+                <i class="bi bi-clock-history"></i>
+            </div>
+            <div class="stat-value">{{ summary.time.second_half.total_hours|default:0|floatformat:1 }} hrs</div>
+            <div class="stat-label">Second Half Hours</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card">
+            <div class="stat-icon" style="background: var(--ks-success-subtle); color: var(--ks-success);">
+                <i class="bi bi-wallet2"></i>
+            </div>
+            <div class="stat-value">${{ summary.expenses.total_expenses|default:0|floatformat:2 }}</div>
+            <div class="stat-label">Total Expenses</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header">Blocking Issues</div>
+            <div class="card-body">
+                {% if errors %}
+                <ul class="mb-0">
+                    {% for issue in errors %}
+                    <li>
+                        <strong>{{ issue.code }}</strong>: {{ issue.message }}
+                        {% if issue.location %}<span class="text-muted">({{ issue.location }})</span>{% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted mb-0">No blocking issues found.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header">Warnings</div>
+            <div class="card-body">
+                {% if warnings %}
+                <ul class="mb-0">
+                    {% for issue in warnings %}
+                    <li>
+                        <strong>{{ issue.code }}</strong>: {{ issue.message }}
+                        {% if issue.location %}<span class="text-muted">({{ issue.location }})</span>{% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted mb-0">No warnings.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,7 +1,7 @@
 from django.contrib import admin
 from simple_history.admin import SimpleHistoryAdmin
 
-from .models import ChargeCode, Timesheet, TimesheetLine, TimeEntry
+from .models import ChargeCode, Timesheet, TimesheetLine, TimeEntry, TimesheetUpload, ClientMapping
 
 
 @admin.register(ChargeCode)
@@ -86,3 +86,28 @@ class TimeEntryAdmin(admin.ModelAdmin):
     ordering = ("-date",)
     raw_id_fields = ("line",)
     date_hierarchy = "date"
+
+
+@admin.register(ClientMapping)
+class ClientMappingAdmin(admin.ModelAdmin):
+    list_display = ("code", "display_name", "sort_order", "active")
+    list_filter = ("active",)
+    search_fields = ("code", "display_name")
+    ordering = ("sort_order", "display_name")
+
+
+@admin.register(TimesheetUpload)
+class TimesheetUploadAdmin(admin.ModelAdmin):
+    list_display = (
+        "user",
+        "year",
+        "month",
+        "status",
+        "has_blocking_errors",
+        "reviewed_by",
+        "uploaded_at",
+    )
+    list_filter = ("status", "year", "month", "has_blocking_errors")
+    search_fields = ("user__email", "user__first_name", "user__last_name")
+    ordering = ("-year", "-month", "-uploaded_at")
+    raw_id_fields = ("user",)

@@ -1,4 +1,6 @@
 from decimal import Decimal
+import hashlib
+import uuid
 
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -35,6 +37,85 @@ class ChargeCode(models.Model):
 
     def __str__(self):
         return f"{self.code} - {self.description}"
+
+
+class ClientMapping(models.Model):
+    code = models.CharField("charge code", max_length=50, unique=True)
+    display_name = models.CharField("display name", max_length=200)
+    sort_order = models.PositiveIntegerField(default=100)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["sort_order", "display_name"]
+        verbose_name = "client mapping"
+        verbose_name_plural = "client mappings"
+
+    def __str__(self):
+        return f"{self.code} - {self.display_name}"
+
+
+def timesheet_upload_path(instance, filename):
+    ext = filename.split(".")[-1].lower() if "." in filename else "xlsx"
+    return (
+        f"timesheet_uploads/{instance.year}/{instance.month:02d}/"
+        f"{instance.user_id}/{uuid.uuid4().hex}.{ext}"
+    )
+
+
+class TimesheetUpload(models.Model):
+    class Status(models.TextChoices):
+        DRAFT = "DRAFT", "Draft"
+        SUBMITTED = "SUBMITTED", "Submitted"
+        RETURNED = "RETURNED", "Returned"
+        APPROVED = "APPROVED", "Approved"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="timesheet_uploads",
+    )
+    uploaded_file = models.FileField(upload_to=timesheet_upload_path)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    sha256 = models.CharField(max_length=64, blank=True)
+
+    year = models.PositiveIntegerField()
+    month = models.PositiveSmallIntegerField()
+
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.DRAFT,
+    )
+
+    parsed_json = models.JSONField(default=dict, blank=True)
+    errors_json = models.JSONField(default=list, blank=True)
+    has_blocking_errors = models.BooleanField(default=False)
+    source_template_version = models.CharField(max_length=100, blank=True)
+    reviewer_comment = models.TextField(blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_uploads",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-year", "-month", "-uploaded_at"]
+        indexes = [
+            models.Index(fields=["user", "year", "month"]),
+            models.Index(fields=["status"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user.get_full_name()} {self.year}-{self.month:02d}"
+
+    def set_sha256_from_bytes(self, file_bytes):
+        self.sha256 = hashlib.sha256(file_bytes).hexdigest()
 
 
 class Timesheet(models.Model):

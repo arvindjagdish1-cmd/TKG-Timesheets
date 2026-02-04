@@ -8,6 +8,13 @@ urlpatterns = [
     # Office Manager Dashboard
     path("reviews/", views.review_dashboard, name="dashboard"),
     path("reviews/pending/", views.pending_reviews, name="pending"),
+    path(
+        "reviews/employee/<int:user_id>/<int:year>/<int:month>/",
+        views.office_employee_detail,
+        name="office_employee_detail",
+    ),
+    path("reviews/upload/<int:pk>/return/", views.office_return_upload, name="office_return_upload"),
+    path("reviews/upload/<int:pk>/approve/", views.office_approve_upload, name="office_approve_upload"),
 
     # Timesheet review
     path("reviews/timesheet/<int:pk>/", views.review_timesheet, name="review_timesheet"),
@@ -31,5 +38,5 @@ urlpatterns = [
 
     # Payroll Partner Views
     path("payroll/", views.payroll_dashboard, name="payroll_dashboard"),
-    path("payroll/export/<int:month_id>/", views.payroll_export, name="payroll_export"),
+    path("payroll/export/<int:year>/<int:month>/", views.payroll_export, name="payroll_export"),
 ]

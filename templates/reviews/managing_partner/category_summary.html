@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load timesheet_tags %}
 
-{% block title %}Category Summary - {{ period.display_name }} - Keystone{% endblock %}
+{% block title %}Category Summary - {{ month_label }} - Keystone{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -37,35 +37,6 @@
         z-index: 2;
         background: var(--ks-bg-secondary);
     }
-    .employee-header {
-        min-width: 90px;
-        max-width: 120px;
-    }
-    .employee-header .emp-name {
-        font-size: 0.6875rem;
-        font-weight: 600;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        writing-mode: horizontal-tb;
-    }
-    .total-row {
-        font-weight: 600;
-        background: var(--ks-bg-tertiary) !important;
-    }
-    .total-row td {
-        background: var(--ks-bg-tertiary) !important;
-    }
-    .total-cell {
-        font-weight: 600;
-        background: var(--ks-bg-tertiary);
-    }
-    .client-row {
-        border-left: 3px solid var(--ks-accent);
-    }
-    .client-row .category-cell {
-        padding-left: 0.875rem;
-    }
     .section-header {
         background: var(--ks-bg-secondary) !important;
         font-weight: 600 !important;
@@ -74,18 +45,9 @@
         letter-spacing: 0.05em;
         color: var(--ks-text-muted);
     }
-    .section-header td {
-        background: var(--ks-bg-secondary) !important;
-    }
-    .has-hours {
-        color: var(--ks-text-primary);
-    }
-    .no-hours {
-        color: var(--ks-text-muted);
-    }
-    .scroll-hint {
-        color: var(--ks-text-muted);
-        font-size: 0.75rem;
+    .total-cell {
+        font-weight: 600;
+        background: var(--ks-bg-tertiary);
     }
 </style>
 {% endblock %}
@@ -100,159 +62,123 @@
             </ol>
         </nav>
         <h1>Category Summary</h1>
-        <p class="text-muted mb-0">{{ period.display_name }} • Hours by charge code</p>
+        <p class="text-muted mb-0">{{ month_label }}</p>
     </div>
     <div class="d-flex gap-2">
-        <a href="{% url 'reviews:daily_summary_period' period.pk %}" class="btn btn-secondary">
+        <a href="{% url 'reviews:daily_summary' %}?month={{ month_param }}" class="btn btn-secondary">
             <i class="bi bi-calendar3 me-2"></i>Daily View
         </a>
     </div>
 </div>
 
-<!-- Period Selector -->
 <div class="card mb-4">
     <div class="card-body">
-        <div class="row align-items-center">
+        <form method="get" class="row g-3 align-items-end">
             <div class="col-md-4">
-                <form method="get" action="{% url 'reviews:category_summary' %}">
-                    <div class="d-flex gap-2">
-                        <select name="period" class="form-select form-select-sm" style="max-width: 250px;">
-                            {% for p in recent_periods %}
-                            <option value="{{ p.pk }}" {% if p.pk == period.pk %}selected{% endif %}>
-                                {{ p.display_name }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                        <button type="submit" class="btn btn-sm btn-primary">
-                            <i class="bi bi-arrow-right"></i>
-                        </button>
-                    </div>
-                </form>
+                <label class="form-label">Month</label>
+                <select name="month" class="form-select">
+                    {% for year, month in month_options %}
+                    {% with value=year|stringformat:"04d"|add:"-"|add:month|stringformat:"02d" %}
+                    <option value="{{ value }}" {% if value == month_param %}selected{% endif %}>
+                        {{ year }}-{{ month|stringformat:"02d" }}
+                    </option>
+                    {% endwith %}
+                    {% endfor %}
+                </select>
             </div>
-            <div class="col-md-8 text-end">
-                <span class="scroll-hint"><i class="bi bi-arrows-expand me-1"></i>Scroll horizontally to see all employees</span>
+            <div class="col-md-4">
+                <button class="btn btn-primary">Apply</button>
             </div>
-        </div>
+        </form>
     </div>
 </div>
 
-<!-- Summary Table -->
-<div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <span><i class="bi bi-grid-3x3 me-2"></i>Hours by Category</span>
-        <span class="text-muted small">{{ employees|length }} employees • {{ category_rows|length }} categories</span>
-    </div>
+<div class="card mb-4">
+    <div class="card-header">Period One (Days 1–15)</div>
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table summary-table mb-0">
                 <thead>
                     <tr>
-                        <th class="category-header" style="min-width: 200px;">Category / Charge Code</th>
+                        <th class="category-header" style="min-width: 220px;">Category</th>
                         {% for emp in employees %}
-                        <th class="employee-header text-center">
-                            <div class="emp-name" title="{{ emp.get_full_name }}">
-                                {{ emp.first_name|default:emp.email|truncatechars:10 }}
-                            </div>
+                        <th class="text-center">
+                            {% if emp.profile_or_none %}
+                                {{ emp.profile_or_none.initials|default:emp.first_name|default:emp.email }}
+                            {% else %}
+                                {{ emp.first_name|default:emp.email }}
+                            {% endif %}
                         </th>
                         {% endfor %}
                         <th class="total-cell text-center">Total</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% regroup category_rows by is_client as grouped_rows %}
-                    
-                    {% for group in grouped_rows %}
-                    {% if group.grouper %}
-                    <!-- Client Work Section -->
-                    <tr class="section-header">
-                        <td colspan="{{ employees|length|add:2 }}">
-                            <i class="bi bi-briefcase me-1"></i> Client Work
-                        </td>
-                    </tr>
-                    {% else %}
-                    <!-- Other Categories Section -->
-                    <tr class="section-header">
-                        <td colspan="{{ employees|length|add:2 }}">
-                            <i class="bi bi-tags me-1"></i> Other Categories
-                        </td>
-                    </tr>
+                    {% for row in first_matrix %}
+                    {% if row.group == "client" and forloop.first %}
+                    <tr class="section-header"><td colspan="{{ employees|length|add:2 }}">Client Work</td></tr>
                     {% endif %}
-                    
-                    {% for row in group.list %}
-                    <tr class="{% if row.is_client %}client-row{% endif %}">
-                        <td class="category-cell" title="{{ row.name }}">
-                            {{ row.name|truncatechars:35 }}
-                        </td>
+                    {% if row.group == "marketing" and row.label == "Marketing - General/Other" %}
+                    <tr class="section-header"><td colspan="{{ employees|length|add:2 }}">Marketing</td></tr>
+                    {% endif %}
+                    {% if row.group == "other" and row.label == "Administration" %}
+                    <tr class="section-header"><td colspan="{{ employees|length|add:2 }}">Other Hours</td></tr>
+                    {% endif %}
+                    <tr>
+                        <td class="category-cell">{{ row.label }}</td>
                         {% for emp in employees %}
-                        {% with hours=row.hours_by_employee|get_item:emp.id %}
-                        <td class="{% if hours and hours > 0 %}has-hours{% else %}no-hours{% endif %}">
-                            {% if hours and hours > 0 %}{{ hours|floatformat:1 }}{% else %}-{% endif %}
-                        </td>
-                        {% endwith %}
+                        <td>{{ row.values|get_item:emp.id|floatformat:1|default:"-" }}</td>
                         {% endfor %}
-                        <td class="total-cell">{{ row.total|floatformat:1 }}</td>
+                        <td class="total-cell">{{ row.total|floatformat:1|default:"-" }}</td>
                     </tr>
                     {% endfor %}
-                    {% endfor %}
-                    
-                    <!-- Totals Row -->
-                    <tr class="total-row">
-                        <td class="category-cell" style="background: var(--ks-bg-tertiary);">
-                            <strong>TOTAL HOURS</strong>
-                        </td>
-                        {% for emp in employees %}
-                        <td>
-                            <strong>{{ employee_totals|get_item:emp.id|floatformat:1|default:"0.0" }}</strong>
-                        </td>
-                        {% endfor %}
-                        <td class="total-cell">
-                            <strong>
-                                {% widthratio 1 1 0 as grand_total %}
-                                {% for emp in employees %}
-                                {% with hours=employee_totals|get_item:emp.id|default:0 %}
-                                {% endwith %}
-                                {% endfor %}
-                            </strong>
-                        </td>
-                    </tr>
                 </tbody>
             </table>
         </div>
     </div>
 </div>
 
-<!-- Summary Stats -->
-<div class="row g-4 mt-3">
-    <div class="col-md-4">
-        <div class="stat-card">
-            <div class="stat-icon" style="background: var(--ks-accent-subtle); color: var(--ks-accent);">
-                <i class="bi bi-people"></i>
-            </div>
-            <div class="stat-value">{{ employees|length }}</div>
-            <div class="stat-label">Active Employees</div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="stat-card">
-            <div class="stat-icon" style="background: var(--ks-success-subtle); color: var(--ks-success);">
-                <i class="bi bi-briefcase"></i>
-            </div>
-            <div class="stat-value">
-                {% with client_count=0 %}
-                {% for row in category_rows %}{% if row.is_client %}{% with client_count=client_count|add:1 %}{% endwith %}{% endif %}{% endfor %}
-                {{ category_rows|length }}
-                {% endwith %}
-            </div>
-            <div class="stat-label">Active Charge Codes</div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="stat-card">
-            <div class="stat-icon" style="background: var(--ks-warning-subtle); color: var(--ks-warning);">
-                <i class="bi bi-calendar-range"></i>
-            </div>
-            <div class="stat-value">{{ period.start_date|date:"M j" }} - {{ period.end_date|date:"M j" }}</div>
-            <div class="stat-label">Period Range</div>
+<div class="card">
+    <div class="card-header">Period Two (Days 16–End)</div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table summary-table mb-0">
+                <thead>
+                    <tr>
+                        <th class="category-header" style="min-width: 220px;">Category</th>
+                        {% for emp in employees %}
+                        <th class="text-center">
+                            {% if emp.profile_or_none %}
+                                {{ emp.profile_or_none.initials|default:emp.first_name|default:emp.email }}
+                            {% else %}
+                                {{ emp.first_name|default:emp.email }}
+                            {% endif %}
+                        </th>
+                        {% endfor %}
+                        <th class="total-cell text-center">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in second_matrix %}
+                    {% if row.group == "client" and forloop.first %}
+                    <tr class="section-header"><td colspan="{{ employees|length|add:2 }}">Client Work</td></tr>
+                    {% endif %}
+                    {% if row.group == "marketing" and row.label == "Marketing - General/Other" %}
+                    <tr class="section-header"><td colspan="{{ employees|length|add:2 }}">Marketing</td></tr>
+                    {% endif %}
+                    {% if row.group == "other" and row.label == "Administration" %}
+                    <tr class="section-header"><td colspan="{{ employees|length|add:2 }}">Other Hours</td></tr>
+                    {% endif %}
+                    <tr>
+                        <td class="category-cell">{{ row.label }}</td>
+                        {% for emp in employees %}
+                        <td>{{ row.values|get_item:emp.id|floatformat:1|default:"-" }}</td>
+                        {% endfor %}
+                        <td class="total-cell">{{ row.total|floatformat:1|default:"-" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>

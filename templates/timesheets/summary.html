@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block title %}Timesheet Summary - Keystone{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="bi bi-clipboard-data me-2" style="opacity: 0.7;"></i>Summary & Validation</h1>
+        <p class="text-muted mb-0">
+            Period: {{ upload.year }}-{{ upload.month|stringformat:"02d" }}
+        </p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'timesheets:upload_timesheet' %}" class="btn btn-secondary">
+            <i class="bi bi-upload me-2"></i>Re-upload
+        </a>
+        <a href="{% url 'timesheets:upload_download' upload.pk %}" class="btn btn-secondary">
+            <i class="bi bi-download me-2"></i>Download Original
+        </a>
+    </div>
+</div>
+
+{% if upload.reviewer_comment %}
+<div class="alert alert-info">
+    <strong>Reviewer Comment:</strong> {{ upload.reviewer_comment }}
+</div>
+{% endif %}
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="stat-card">
+            <div class="stat-icon" style="background: var(--ks-accent-subtle); color: var(--ks-accent);">
+                <i class="bi bi-clock"></i>
+            </div>
+            <div class="stat-value">{{ summary.time.first_half.total_hours|default:0|floatformat:1 }} hrs</div>
+            <div class="stat-label">First Half Hours</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card">
+            <div class="stat-icon" style="background: var(--ks-accent-subtle); color: var(--ks-accent);">
+                <i class="bi bi-clock-history"></i>
+            </div>
+            <div class="stat-value">{{ summary.time.second_half.total_hours|default:0|floatformat:1 }} hrs</div>
+            <div class="stat-label">Second Half Hours</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card">
+            <div class="stat-icon" style="background: var(--ks-success-subtle); color: var(--ks-success);">
+                <i class="bi bi-wallet2"></i>
+            </div>
+            <div class="stat-value">${{ summary.expenses.total_expenses|default:0|floatformat:2 }}</div>
+            <div class="stat-label">Total Expenses</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header">Hours by Charge Code (First Half)</div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Code</th>
+                                <th class="text-end">Hours</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for code, hours in summary.time.first_half.totals_by_client_code.items %}
+                            <tr>
+                                <td>{{ code }}</td>
+                                <td class="text-end">{{ hours|floatformat:1 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="2" class="text-muted text-center">No client hours found.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header">Hours by Charge Code (Second Half)</div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Code</th>
+                                <th class="text-end">Hours</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for code, hours in summary.time.second_half.totals_by_client_code.items %}
+                            <tr>
+                                <td>{{ code }}</td>
+                                <td class="text-end">{{ hours|floatformat:1 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="2" class="text-muted text-center">No client hours found.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mt-2">
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header">Expenses by Category</div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Category</th>
+                                <th class="text-end">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for bucket, amount in summary.expenses.totals_by_bucket.items %}
+                            <tr>
+                                <td>{{ bucket }}</td>
+                                <td class="text-end">${{ amount|floatformat:2 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="2" class="text-muted text-center">No expense data.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header">Expenses by Charge Code</div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Charge Code</th>
+                                <th class="text-end">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for code, amount in summary.expenses.totals_by_charge_code.items %}
+                            <tr>
+                                <td>{{ code }}</td>
+                                <td class="text-end">${{ amount|floatformat:2 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="2" class="text-muted text-center">No coded expenses.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mt-2">
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header">Blocking Issues</div>
+            <div class="card-body">
+                {% if errors %}
+                <ul class="mb-0">
+                    {% for issue in errors %}
+                    <li>
+                        <strong>{{ issue.code }}</strong>: {{ issue.message }}
+                        {% if issue.location %}<span class="text-muted">({{ issue.location }})</span>{% endif %}
+                        {% if issue.hint %}<div class="text-muted small">{{ issue.hint }}</div>{% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted mb-0">No blocking issues found.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header">Warnings</div>
+            <div class="card-body">
+                {% if warnings %}
+                <ul class="mb-0">
+                    {% for issue in warnings %}
+                    <li>
+                        <strong>{{ issue.code }}</strong>: {{ issue.message }}
+                        {% if issue.location %}<span class="text-muted">({{ issue.location }})</span>{% endif %}
+                        {% if issue.hint %}<div class="text-muted small">{{ issue.hint }}</div>{% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted mb-0">No warnings.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mt-4 d-flex justify-content-end gap-2">
+    <form method="post" action="{% url 'timesheets:upload_submit' upload.pk %}">
+        {% csrf_token %}
+        <button class="btn btn-primary" {% if upload.has_blocking_errors %}disabled{% endif %}>
+            <i class="bi bi-send me-2"></i>Submit
+        </button>
+    </form>
+</div>
+{% endblock %}

@@ -159,7 +159,7 @@
 {% block content %}
 <!-- Welcome Section -->
 <div class="welcome-section fade-in">
-    <h1>Welcome back, {{ user.first_name|default:user.email }}</h1>
+    <h1>Welcome back, {{ user.get_full_name|default:user.email }}</h1>
     <p>Manage your timesheets and expenses from your personal dashboard</p>
     <div class="current-date">
         <i class="bi bi-calendar3 me-1"></i>{% now "l, F j, Y" %}
@@ -167,126 +167,96 @@
 </div>
 
 <div class="row g-4">
-    <!-- Current Timesheet Card -->
+    <!-- Current Upload Card -->
     <div class="col-lg-6 fade-in fade-in-delay-1">
         <div class="card action-card timesheet h-100">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-clock me-2"></i>Current Timesheet</span>
-                {% if current_timesheet %}
-                <span class="badge-status badge-{{ current_timesheet.status|lower }}">
-                    {{ current_timesheet.get_status_display }}
+                <span><i class="bi bi-cloud-arrow-up me-2"></i>Current Upload</span>
+                {% if latest_upload %}
+                <span class="badge-status badge-{{ latest_upload.status|lower }}">
+                    {{ latest_upload.get_status_display }}
                 </span>
                 {% endif %}
             </div>
             <div class="card-body">
-                {% if current_timesheet %}
+                {% if latest_upload %}
                 <div class="d-flex align-items-start justify-content-between mb-2">
                     <div class="card-icon">
-                        <i class="bi bi-calendar-check"></i>
+                        <i class="bi bi-cloud-check"></i>
                     </div>
-                    {% if current_ts_period.is_past_due and current_timesheet.status == 'DRAFT' %}
+                    {% if latest_upload.has_blocking_errors %}
                     <span class="badge bg-danger">
-                        <i class="bi bi-exclamation-triangle me-1"></i>Overdue
+                        <i class="bi bi-exclamation-triangle me-1"></i>Blocking Errors
                     </span>
                     {% endif %}
                 </div>
-                <p class="card-period">{{ current_ts_period.display_name }}</p>
+                <p class="card-period">{{ latest_upload.year }}-{{ latest_upload.month|stringformat:"02d" }}</p>
                 
                 <div class="stat-grid">
                     <div class="stat-item">
-                        <div class="stat-value">{{ current_timesheet.total_hours|floatformat:1 }}</div>
-                        <div class="stat-label">Hours</div>
+                        <div class="stat-value">{{ latest_upload.parsed_json.time.first_half.total_hours|default:0|floatformat:1 }}</div>
+                        <div class="stat-label">1st Half</div>
                     </div>
                     <div class="stat-item">
-                        <div class="stat-value">{{ current_ts_period.due_date|date:"M j" }}</div>
-                        <div class="stat-label">Due</div>
+                        <div class="stat-value">{{ latest_upload.parsed_json.time.second_half.total_hours|default:0|floatformat:1 }}</div>
+                        <div class="stat-label">2nd Half</div>
                     </div>
                     <div class="stat-item">
-                        <div class="stat-value">{{ current_timesheet.lines.count }}</div>
-                        <div class="stat-label">Lines</div>
+                        <div class="stat-value">${{ latest_upload.parsed_json.expenses.total_expenses|default:0|floatformat:0 }}</div>
+                        <div class="stat-label">Expenses</div>
                     </div>
                 </div>
 
                 <div class="d-grid">
-                    {% if current_timesheet.is_editable %}
-                    <a href="{% url 'timesheets:timesheet_edit' current_timesheet.pk %}" class="btn btn-primary btn-lg">
-                        <i class="bi bi-pencil me-2"></i>Edit Timesheet
+                    <a href="{% url 'timesheets:upload_summary' latest_upload.pk %}" class="btn btn-primary btn-lg">
+                        <i class="bi bi-eye me-2"></i>View Summary
                     </a>
-                    {% else %}
-                    <a href="{% url 'timesheets:timesheet_detail' current_timesheet.pk %}" class="btn btn-outline-primary btn-lg">
-                        <i class="bi bi-eye me-2"></i>View Timesheet
-                    </a>
-                    {% endif %}
                 </div>
                 {% else %}
                 <div class="empty-state">
-                    <i class="bi bi-calendar-x d-block"></i>
-                    <h6>No Active Period</h6>
-                    <p>No timesheet period is currently active.<br>Contact your administrator if needed.</p>
+                    <i class="bi bi-cloud-upload d-block"></i>
+                    <h6>No Upload Yet</h6>
+                    <p>Upload your completed workbook to get started.</p>
                 </div>
                 {% endif %}
             </div>
         </div>
     </div>
 
-    <!-- Current Expense Report Card -->
+    <!-- Upload Action Card -->
     <div class="col-lg-6 fade-in fade-in-delay-2">
         <div class="card action-card expense h-100">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-receipt me-2"></i>Current Expense Report</span>
-                {% if current_expense %}
-                <span class="badge-status badge-{{ current_expense.status|lower }}">
-                    {{ current_expense.get_status_display }}
-                </span>
-                {% endif %}
+                <span><i class="bi bi-upload me-2"></i>Upload Workbook</span>
             </div>
             <div class="card-body">
-                {% if current_expense %}
                 <div class="d-flex align-items-start justify-content-between mb-2">
                     <div class="card-icon">
-                        <i class="bi bi-wallet2"></i>
+                        <i class="bi bi-file-earmark-spreadsheet"></i>
                     </div>
-                    {% if current_expense_month.is_past_due and current_expense.status == 'DRAFT' %}
-                    <span class="badge bg-danger">
-                        <i class="bi bi-exclamation-triangle me-1"></i>Overdue
-                    </span>
-                    {% endif %}
                 </div>
-                <p class="card-period">{{ current_expense_month.display_name }}</p>
+                <p class="card-period">Timesheet & Expense Upload</p>
                 
                 <div class="stat-grid">
                     <div class="stat-item">
-                        <div class="stat-value">${{ current_expense.grand_total|floatformat:0 }}</div>
-                        <div class="stat-label">Total</div>
+                        <div class="stat-value">.xlsx</div>
+                        <div class="stat-label">Format</div>
                     </div>
                     <div class="stat-item">
-                        <div class="stat-value">{{ current_expense_month.due_date|date:"M j" }}</div>
-                        <div class="stat-label">Due</div>
+                        <div class="stat-value">2</div>
+                        <div class="stat-label">Half-Months</div>
                     </div>
                     <div class="stat-item">
-                        <div class="stat-value">{{ current_expense.items.count }}</div>
-                        <div class="stat-label">Items</div>
+                        <div class="stat-value">3</div>
+                        <div class="stat-label">Sections</div>
                     </div>
                 </div>
 
                 <div class="d-grid">
-                    {% if current_expense.is_editable %}
-                    <a href="{% url 'expenses:expense_edit' current_expense.pk %}" class="btn btn-success btn-lg">
-                        <i class="bi bi-plus-circle me-2"></i>Add/Edit Expenses
+                    <a href="{% url 'timesheets:upload_timesheet' %}" class="btn btn-success btn-lg">
+                        <i class="bi bi-cloud-arrow-up me-2"></i>Upload Workbook
                     </a>
-                    {% else %}
-                    <a href="{% url 'expenses:expense_detail' current_expense.pk %}" class="btn btn-outline-success btn-lg">
-                        <i class="bi bi-eye me-2"></i>View Report
-                    </a>
-                    {% endif %}
                 </div>
-                {% else %}
-                <div class="empty-state">
-                    <i class="bi bi-calendar-x d-block"></i>
-                    <h6>No Active Period</h6>
-                    <p>No expense period is currently active.</p>
-                </div>
-                {% endif %}
             </div>
         </div>
     </div>
@@ -340,15 +310,9 @@
                                     {{ ts.total_hours|floatformat:1 }} hrs
                                 </td>
                                 <td class="text-end">
-                                    {% if ts.is_editable %}
-                                    <a href="{% url 'timesheets:timesheet_edit' ts.pk %}" class="btn btn-sm btn-primary">
-                                        <i class="bi bi-pencil me-1"></i>Edit
+                                    <a href="{% url 'timesheets:upload_timesheet' %}" class="btn btn-sm btn-secondary">
+                                        <i class="bi bi-cloud-arrow-up me-1"></i>Upload
                                     </a>
-                                    {% else %}
-                                    <a href="{% url 'timesheets:timesheet_detail' ts.pk %}" class="btn btn-sm btn-secondary">
-                                        <i class="bi bi-eye me-1"></i>View
-                                    </a>
-                                    {% endif %}
                                 </td>
                             </tr>
                             {% empty %}
@@ -379,15 +343,9 @@
                                     ${{ er.grand_total|floatformat:2 }}
                                 </td>
                                 <td class="text-end">
-                                    {% if er.is_editable %}
-                                    <a href="{% url 'expenses:expense_edit' er.pk %}" class="btn btn-sm btn-success">
-                                        <i class="bi bi-pencil me-1"></i>Edit
+                                    <a href="{% url 'timesheets:upload_timesheet' %}" class="btn btn-sm btn-secondary">
+                                        <i class="bi bi-cloud-arrow-up me-1"></i>Upload
                                     </a>
-                                    {% else %}
-                                    <a href="{% url 'expenses:expense_detail' er.pk %}" class="btn btn-sm btn-secondary">
-                                        <i class="bi bi-eye me-1"></i>View
-                                    </a>
-                                    {% endif %}
                                 </td>
                             </tr>
                             {% empty %}

@@ -4,7 +4,7 @@ Managing Partner and Payroll Partner views.
 """
 import csv
 from collections import defaultdict
-from datetime import timedelta
+from datetime import timedelta, date
 from decimal import Decimal
 from io import BytesIO, StringIO
 
@@ -17,6 +17,8 @@ from django.db import transaction
 from django.db.models import Q, Count, Sum
 from django.utils import timezone
 from django.contrib.contenttypes.models import ContentType
+from django.conf import settings
+from calendar import monthrange
 
 try:
     from openpyxl import Workbook
@@ -26,11 +28,41 @@ try:
 except ImportError:
     HAS_OPENPYXL = False
 
-from apps.timesheets.models import Timesheet, TimesheetLine, TimeEntry, ChargeCode
+from apps.timesheets.models import Timesheet, TimesheetLine, TimeEntry, ChargeCode, TimesheetUpload, ClientMapping
 from apps.expenses.models import ExpenseReport, ExpenseCategory, ExpenseItem
 from apps.periods.models import TimesheetPeriod, ExpenseMonth
 from apps.accounts.models import User, EmployeeProfile
 from .models import ReviewAction, ReviewComment
+
+
+def _parse_month_param(value):
+    if not value:
+        today = timezone.now().date()
+        return today.year, today.month
+    try:
+        year_str, month_str = value.split("-")
+        return int(year_str), int(month_str)
+    except ValueError:
+        today = timezone.now().date()
+        return today.year, today.month
+
+
+def _month_label(year, month):
+    return date(year, month, 1).strftime("%B %Y")
+
+
+def _active_employees():
+    return User.objects.filter(
+        is_active=True,
+    ).select_related("profile").distinct().order_by("last_name", "first_name")
+
+
+def _latest_upload_for_user(user, year, month):
+    return (
+        TimesheetUpload.objects.filter(user=user, year=year, month=month)
+        .order_by("-uploaded_at")
+        .first()
+    )
 
 
 def office_manager_required(view_func):
@@ -76,113 +108,136 @@ def payroll_partner_required(view_func):
 @office_manager_required
 def review_dashboard(request):
     """Office Manager dashboard: submission status overview."""
-    # Get active periods
-    current_ts_period = TimesheetPeriod.get_current_period()
-    current_expense_month = ExpenseMonth.get_current_month()
+    year, month = _parse_month_param(request.GET.get("month"))
+    status_filter = request.GET.get("status", "ALL")
 
-    # Get recent periods for filtering
-    recent_ts_periods = TimesheetPeriod.objects.order_by("-year", "-month", "-half")[:6]
-    recent_expense_months = ExpenseMonth.objects.order_by("-year", "-month")[:3]
+    months = (
+        TimesheetUpload.objects.values_list("year", "month")
+        .distinct()
+        .order_by("-year", "-month")[:6]
+    )
+    if (year, month) not in months:
+        months = [(year, month)] + list(months)
 
-    # Get selected period from query params
-    ts_period_id = request.GET.get("ts_period")
-    expense_month_id = request.GET.get("expense_month")
+    rows = []
+    pending_count = 0
+    active_employees = _active_employees()
 
-    selected_ts_period = None
-    selected_expense_month = None
+    for emp in active_employees:
+        upload = _latest_upload_for_user(emp, year, month)
+        if not upload:
+            status = "MISSING"
+            hours = 0
+            expenses = 0
+            error_state = "missing"
+        else:
+            status = upload.status
+            summary = upload.parsed_json or {}
+            hours = (
+                (summary.get("time", {}).get("first_half", {}).get("total_hours") or 0)
+                + (summary.get("time", {}).get("second_half", {}).get("total_hours") or 0)
+            )
+            expenses = summary.get("expenses", {}).get("total_expenses", 0)
+            if upload.has_blocking_errors:
+                error_state = "blocking"
+            elif any(issue.get("severity") == "WARN" for issue in upload.errors_json):
+                error_state = "warning"
+            else:
+                error_state = "ok"
+            if upload.status == TimesheetUpload.Status.SUBMITTED:
+                pending_count += 1
 
-    if ts_period_id:
-        selected_ts_period = TimesheetPeriod.objects.filter(pk=ts_period_id).first()
-    elif current_ts_period:
-        selected_ts_period = current_ts_period
+        if status_filter != "ALL" and status != status_filter:
+            continue
 
-    if expense_month_id:
-        selected_expense_month = ExpenseMonth.objects.filter(pk=expense_month_id).first()
-    elif current_expense_month:
-        selected_expense_month = current_expense_month
-
-    # Get all active employees
-    active_employees = User.objects.filter(
-        is_active=True,
-        groups__name="employees"
-    ).select_related("profile").distinct()
-
-    # Timesheet status for selected period
-    ts_status = []
-    if selected_ts_period:
-        for emp in active_employees:
-            try:
-                ts = Timesheet.objects.get(employee=emp, period=selected_ts_period)
-                ts_status.append({
-                    "employee": emp,
-                    "timesheet": ts,
-                    "status": ts.status,
-                    "hours": ts.total_hours,
-                })
-            except Timesheet.DoesNotExist:
-                ts_status.append({
-                    "employee": emp,
-                    "timesheet": None,
-                    "status": "MISSING",
-                    "hours": 0,
-                })
-
-    # Expense status for selected month
-    expense_status = []
-    if selected_expense_month:
-        for emp in active_employees:
-            try:
-                er = ExpenseReport.objects.get(employee=emp, month=selected_expense_month)
-                expense_status.append({
-                    "employee": emp,
-                    "report": er,
-                    "status": er.status,
-                    "total": er.grand_total,
-                })
-            except ExpenseReport.DoesNotExist:
-                expense_status.append({
-                    "employee": emp,
-                    "report": None,
-                    "status": "MISSING",
-                    "total": 0,
-                })
-
-    # Pending reviews count
-    pending_timesheets = Timesheet.objects.filter(status=Timesheet.Status.SUBMITTED).count()
-    pending_expenses = ExpenseReport.objects.filter(status=ExpenseReport.Status.SUBMITTED).count()
+        rows.append({
+            "employee": emp,
+            "upload": upload,
+            "status": status,
+            "total_hours": hours,
+            "total_expenses": expenses,
+            "error_state": error_state,
+        })
 
     context = {
-        "current_ts_period": current_ts_period,
-        "current_expense_month": current_expense_month,
-        "selected_ts_period": selected_ts_period,
-        "selected_expense_month": selected_expense_month,
-        "recent_ts_periods": recent_ts_periods,
-        "recent_expense_months": recent_expense_months,
-        "ts_status": ts_status,
-        "expense_status": expense_status,
-        "pending_timesheets": pending_timesheets,
-        "pending_expenses": pending_expenses,
+        "rows": rows,
+        "month_options": months,
+        "selected_month": f"{year}-{month:02d}",
+        "selected_month_label": _month_label(year, month),
+        "status_filter": status_filter,
+        "pending_count": pending_count,
     }
-    return render(request, "reviews/dashboard.html", context)
+    return render(request, "reviews/office_dashboard.html", context)
 
 
 @login_required
 @office_manager_required
 def pending_reviews(request):
     """List all pending submissions awaiting review."""
-    pending_timesheets = Timesheet.objects.filter(
-        status=Timesheet.Status.SUBMITTED
-    ).select_related("employee", "period").order_by("submitted_at")
-
-    pending_expenses = ExpenseReport.objects.filter(
-        status=ExpenseReport.Status.SUBMITTED
-    ).select_related("employee", "month").order_by("submitted_at")
+    pending_uploads = TimesheetUpload.objects.filter(
+        status=TimesheetUpload.Status.SUBMITTED
+    ).select_related("user").order_by("uploaded_at")
 
     context = {
-        "pending_timesheets": pending_timesheets,
-        "pending_expenses": pending_expenses,
+        "pending_uploads": pending_uploads,
     }
     return render(request, "reviews/pending.html", context)
+
+
+@login_required
+@office_manager_required
+def office_employee_detail(request, user_id, year, month):
+    employee = get_object_or_404(User, pk=user_id)
+    upload = (
+        TimesheetUpload.objects.filter(user=employee, year=year, month=month)
+        .order_by("-uploaded_at")
+        .first()
+    )
+    if not upload:
+        messages.error(request, "No upload found for this employee.")
+        return redirect("reviews:dashboard")
+
+    errors = [i for i in upload.errors_json if i.get("severity") == "ERROR"]
+    warnings = [i for i in upload.errors_json if i.get("severity") == "WARN"]
+
+    context = {
+        "employee": employee,
+        "upload": upload,
+        "summary": upload.parsed_json or {},
+        "errors": errors,
+        "warnings": warnings,
+    }
+    return render(request, "reviews/employee_detail_readonly.html", context)
+
+
+@login_required
+@office_manager_required
+@require_POST
+def office_return_upload(request, pk):
+    upload = get_object_or_404(TimesheetUpload, pk=pk)
+    comment = request.POST.get("comment", "").strip()
+    upload.status = TimesheetUpload.Status.RETURNED
+    upload.reviewer_comment = comment
+    upload.reviewed_by = request.user
+    upload.reviewed_at = timezone.now()
+    upload.save(update_fields=["status", "reviewer_comment", "reviewed_by", "reviewed_at", "updated_at"])
+    messages.success(request, f"Upload returned for {upload.user.get_full_name()}.")
+    return redirect("reviews:office_employee_detail", user_id=upload.user_id, year=upload.year, month=upload.month)
+
+
+@login_required
+@office_manager_required
+@require_POST
+def office_approve_upload(request, pk):
+    upload = get_object_or_404(TimesheetUpload, pk=pk)
+    comment = request.POST.get("comment", "").strip()
+    upload.status = TimesheetUpload.Status.APPROVED
+    upload.reviewer_comment = comment
+    upload.reviewed_by = request.user
+    upload.reviewed_at = timezone.now()
+    upload.save(update_fields=["status", "reviewer_comment", "reviewed_by", "reviewed_at", "updated_at"])
+    messages.success(request, f"Upload approved for {upload.user.get_full_name()}.")
+    return redirect("reviews:office_employee_detail", user_id=upload.user_id, year=upload.year, month=upload.month)
 
 
 @login_required
@@ -487,21 +542,20 @@ def _check_flags(daily_hours):
 @managing_partner_required
 def managing_partner_dashboard(request):
     """Managing Partner dashboard with period selection."""
-    # Get recent periods
-    recent_ts_periods = TimesheetPeriod.objects.order_by("-year", "-month", "-half")[:12]
-    current_period = TimesheetPeriod.get_current_period()
-    
-    # Get selected period
-    period_id = request.GET.get("period")
-    if period_id:
-        selected_period = TimesheetPeriod.objects.filter(pk=period_id).first()
-    else:
-        selected_period = current_period
-    
+    today = timezone.now().date()
+    year, month = _parse_month_param(request.GET.get("month"))
+    months = (
+        TimesheetUpload.objects.values_list("year", "month")
+        .distinct()
+        .order_by("-year", "-month")[:12]
+    )
+    if (year, month) not in months:
+        months = [(year, month)] + list(months)
+
     context = {
-        "recent_periods": recent_ts_periods,
-        "selected_period": selected_period,
-        "current_period": current_period,
+        "month_options": months,
+        "selected_month": f"{year}-{month:02d}",
+        "selected_month_label": _month_label(year, month),
     }
     return render(request, "reviews/managing_partner/dashboard.html", context)
 
@@ -510,60 +564,84 @@ def managing_partner_dashboard(request):
 @managing_partner_required
 def daily_summary(request, period_id=None):
     """
-    By-day timesheet summary for a half-month period.
-    Shows hours by day for each employee with flags.
+    By-day timesheet summary for a month (two half tables).
     """
-    if period_id:
-        period = get_object_or_404(TimesheetPeriod, pk=period_id)
-    else:
-        period = TimesheetPeriod.get_current_period()
-        if not period:
-            return render(request, "reviews/managing_partner/no_period.html")
-    
-    dates = _get_period_dates(period)
-    
-    # Get all employees with timesheets
-    employees = User.objects.filter(
-        is_active=True,
-        groups__name="employees"
-    ).select_related("profile").distinct().order_by("last_name", "first_name")
-    
-    employee_data = []
-    for emp in employees:
-        try:
-            ts = Timesheet.objects.get(employee=emp, period=period)
-            daily_hours = _get_daily_hours(ts, dates)
-            flags = _check_flags(daily_hours)
-            total = sum(daily_hours.values())
-            
-            employee_data.append({
+    year, month = _parse_month_param(request.GET.get("month"))
+    last_day = monthrange(year, month)[1]
+    first_dates = [date(year, month, d) for d in range(1, 16)]
+    second_dates = [date(year, month, d) for d in range(16, last_day + 1)]
+
+    employees = _active_employees()
+    min_weekday_hours = Decimal(str(getattr(settings, "MIN_WEEKDAY_HOURS", 8)))
+    high_hours = Decimal(str(getattr(settings, "HIGH_HOURS_THRESHOLD", 10)))
+    high_days_threshold = getattr(settings, "HIGH_HOURS_DAYS_PER_WEEK_THRESHOLD", 2)
+
+    def build_rows(dates, half_key):
+        rows = []
+        for emp in employees:
+            upload = _latest_upload_for_user(emp, year, month)
+            if not upload:
+                rows.append({
+                    "employee": emp,
+                    "daily_totals": {d: None for d in dates},
+                    "total_hours": Decimal("0"),
+                    "missing": True,
+                    "flags": {"incomplete": set(), "high_hours": set()},
+                })
+                continue
+
+            daily_map = upload.parsed_json.get("time", {}).get(half_key, {}).get("daily_totals", {})
+            daily_totals = {d: Decimal(str(daily_map.get(d.isoformat(), 0))) for d in dates}
+
+            flags = {"incomplete": set(), "high_hours": set()}
+            for d, hours in daily_totals.items():
+                if d.weekday() < 5 and hours < min_weekday_hours:
+                    flags["incomplete"].add(d)
+
+            # High hours week rule across full month
+            all_daily = {}
+            for half in ("first_half", "second_half"):
+                half_map = upload.parsed_json.get("time", {}).get(half, {}).get("daily_totals", {})
+                for key, value in half_map.items():
+                    all_daily[key] = Decimal(str(value))
+
+            weekly = defaultdict(list)
+            for day_str, hours in all_daily.items():
+                day = date.fromisoformat(day_str)
+                if hours > high_hours:
+                    weekly[day.isocalendar()[:2]].append(day)
+            for week_days in weekly.values():
+                if len(week_days) > high_days_threshold:
+                    flags["high_hours"].update(week_days)
+
+            total = sum(daily_totals.values())
+            rows.append({
                 "employee": emp,
-                "timesheet": ts,
-                "daily_hours": daily_hours,
+                "daily_totals": daily_totals,
                 "total_hours": total,
+                "missing": False,
                 "flags": flags,
-                "has_flags": bool(flags["incomplete_days"] or flags["excessive_hours_weeks"]),
             })
-        except Timesheet.DoesNotExist:
-            # No timesheet for this period
-            employee_data.append({
-                "employee": emp,
-                "timesheet": None,
-                "daily_hours": {d: Decimal("0") for d in dates},
-                "total_hours": Decimal("0"),
-                "flags": {"incomplete_days": [], "excessive_hours_weeks": []},
-                "has_flags": True,  # Missing timesheet is a flag
-                "missing": True,
-            })
-    
-    # Get recent periods for navigation
-    recent_periods = TimesheetPeriod.objects.order_by("-year", "-month", "-half")[:12]
-    
+        return rows
+
+    month_options = (
+        TimesheetUpload.objects.values_list("year", "month")
+        .distinct()
+        .order_by("-year", "-month")[:12]
+    )
+    if (year, month) not in month_options:
+        month_options = [(year, month)] + list(month_options)
+
     context = {
-        "period": period,
-        "dates": dates,
-        "employee_data": employee_data,
-        "recent_periods": recent_periods,
+        "month_label": _month_label(year, month),
+        "month_param": f"{year}-{month:02d}",
+        "month_options": month_options,
+        "first_dates": first_dates,
+        "second_dates": second_dates,
+        "first_rows": build_rows(first_dates, "first_half"),
+        "second_rows": build_rows(second_dates, "second_half"),
+        "min_weekday_hours": float(min_weekday_hours),
+        "high_hours_threshold": float(high_hours),
     }
     return render(request, "reviews/managing_partner/daily_summary.html", context)
 
@@ -572,89 +650,147 @@ def daily_summary(request, period_id=None):
 @managing_partner_required
 def category_summary(request, period_id=None):
     """
-    Category summary for a half-month period.
-    People horizontal, categories vertical.
+    Category summary for a month (two half tables).
     """
-    if period_id:
-        period = get_object_or_404(TimesheetPeriod, pk=period_id)
-    else:
-        period = TimesheetPeriod.get_current_period()
-        if not period:
-            return render(request, "reviews/managing_partner/no_period.html")
-    
-    # Get all employees
-    employees = User.objects.filter(
-        is_active=True,
-        groups__name="employees"
-    ).select_related("profile").distinct().order_by("last_name", "first_name")
-    
-    # Get all charge codes, clients first, then others
-    charge_codes = list(ChargeCode.objects.filter(active=True).order_by("-is_client_work", "code"))
-    
-    # Build the summary grid
-    # Structure: {charge_code_id: {employee_id: hours}}
-    summary = defaultdict(lambda: defaultdict(Decimal))
-    employee_totals = defaultdict(Decimal)
-    code_totals = defaultdict(Decimal)
-    
+    year, month = _parse_month_param(request.GET.get("month"))
+    employees = _active_employees()
+
+    client_labels = {}
+    client_codes = set()
+
+    def collect_client_labels(upload, half_key):
+        for line in upload.parsed_json.get("time", {}).get(half_key, {}).get("lines", []):
+            if line.get("group") == "client" and line.get("charge_code"):
+                code = line.get("charge_code")
+                label = line.get("label") or code
+                client_codes.add(code)
+                if code not in client_labels:
+                    client_labels[code] = label
+
+    uploads_by_user = {}
     for emp in employees:
-        try:
-            ts = Timesheet.objects.get(employee=emp, period=period)
-            for line in ts.lines.select_related("charge_code").prefetch_related("entries").all():
-                total_hours = sum(e.hours for e in line.entries.all())
-                # Use code + label for client work
-                key = f"{line.charge_code_id}:{line.label}" if line.label else str(line.charge_code_id)
-                summary[key][emp.id] = total_hours
-                employee_totals[emp.id] += total_hours
-                code_totals[key] += total_hours
-        except Timesheet.DoesNotExist:
-            pass
-    
-    # Build ordered list of category rows
-    category_rows = []
-    
-    # First, client work (sorted by total hours descending)
-    client_keys = [k for k in summary.keys() if ":" in k]
-    client_keys.sort(key=lambda k: code_totals[k], reverse=True)
-    
-    for key in client_keys:
-        code_id, label = key.split(":", 1)
-        try:
-            code = ChargeCode.objects.get(pk=int(code_id))
-            category_rows.append({
-                "key": key,
-                "name": f"{code.code}: {label}",
-                "is_client": True,
-                "hours_by_employee": summary[key],
-                "total": code_totals[key],
-            })
-        except ChargeCode.DoesNotExist:
-            pass
-    
-    # Then, other charge codes (sorted by code)
-    other_keys = [k for k in summary.keys() if ":" not in k]
-    for key in sorted(other_keys, key=lambda k: ChargeCode.objects.get(pk=int(k)).code if k.isdigit() else k):
-        try:
-            code = ChargeCode.objects.get(pk=int(key))
-            category_rows.append({
-                "key": key,
-                "name": f"{code.code} - {code.description}",
-                "is_client": False,
-                "hours_by_employee": summary[key],
-                "total": code_totals[key],
-            })
-        except (ChargeCode.DoesNotExist, ValueError):
-            pass
-    
-    # Get recent periods for navigation
-    recent_periods = TimesheetPeriod.objects.order_by("-year", "-month", "-half")[:12]
-    
+        upload = _latest_upload_for_user(emp, year, month)
+        if upload:
+            uploads_by_user[emp.id] = upload
+            collect_client_labels(upload, "first_half")
+            collect_client_labels(upload, "second_half")
+
+    marketing_rows = [
+        ("Marketing - General/Other", "GEN"),
+        ("Chicago - Strategics", "CHI-STRAT"),
+        ("Chicago - Banks", "CHI-BNK"),
+        ("Chicago - Existing", "CHI-EXST"),
+        ("Chicago - PE", "CHI-PEG"),
+        ("Atlanta - Strategics", "ATL-STRAT"),
+        ("Atlanta - Banks", "ATL-BNK"),
+        ("Atlanta - Existing", "ATL-EXST"),
+        ("Atlanta - PE", "ATL-PEG"),
+        ("Los Angeles - Strategics", "LAX-STRAT"),
+        ("Los Angeles - Banks", "LAX-BNK"),
+        ("Los Angeles - Existing", "LAX-EXST"),
+        ("Los Angeles - PE", "LAX-PEG"),
+    ]
+
+    other_rows = [
+        ("Administration", "ADM"),
+        ("Recruiting", "REC"),
+        ("Training", "TRN"),
+        ("Meetings", "MTG"),
+        ("PTO", "PTO"),
+        ("Other Paid Time Off", "HOL+OFF"),
+    ]
+
+    client_order = list(
+        ClientMapping.objects.filter(active=True).order_by("sort_order", "display_name")
+    )
+    client_order_codes = [c.code for c in client_order]
+
+    def build_matrix(half_key):
+        matrix = []
+        employee_totals = defaultdict(Decimal)
+
+        ordered_codes = [code for code in client_order_codes if code in client_codes]
+        ordered_codes += sorted([code for code in client_codes if code not in ordered_codes])
+
+        for code in ordered_codes:
+            mapping = next((c for c in client_order if c.code == code), None)
+            label = mapping.display_name if mapping else client_labels.get(code, code)
+            row = {"label": label, "code": code, "group": "client", "values": {}}
+            total = Decimal("0")
+            for emp in employees:
+                upload = uploads_by_user.get(emp.id)
+                hours = Decimal("0")
+                if upload:
+                    totals = upload.parsed_json.get("time", {}).get(half_key, {}).get("totals_by_client_code", {})
+                    hours = Decimal(str(totals.get(code, 0)))
+                row["values"][emp.id] = hours
+                total += hours
+                employee_totals[emp.id] += hours
+            row["total"] = total
+            matrix.append(row)
+
+        matrix.append({"label": "Total Chargeable", "group": "total", "values": {}, "total": None})
+
+        for label, code in marketing_rows:
+            row = {"label": label, "code": code, "group": "marketing", "values": {}}
+            total = Decimal("0")
+            for emp in employees:
+                upload = uploads_by_user.get(emp.id)
+                hours = Decimal("0")
+                if upload:
+                    totals = upload.parsed_json.get("time", {}).get(half_key, {}).get("totals_by_marketing_bucket", {})
+                    hours = Decimal(str(totals.get(code, 0)))
+                row["values"][emp.id] = hours
+                total += hours
+                employee_totals[emp.id] += hours
+            row["total"] = total
+            matrix.append(row)
+
+        matrix.append({"label": "Total Marketing", "group": "total", "values": {}, "total": None})
+
+        for label, code in other_rows:
+            row = {"label": label, "code": code, "group": "other", "values": {}}
+            total = Decimal("0")
+            for emp in employees:
+                upload = uploads_by_user.get(emp.id)
+                hours = Decimal("0")
+                if upload:
+                    totals = upload.parsed_json.get("time", {}).get(half_key, {}).get("totals_by_other_hours", {})
+                    if code == "HOL+OFF":
+                        hours = Decimal(str(totals.get("HOL", 0))) + Decimal(str(totals.get("OFF", 0)))
+                    else:
+                        hours = Decimal(str(totals.get(code, 0)))
+                row["values"][emp.id] = hours
+                total += hours
+                employee_totals[emp.id] += hours
+            row["total"] = total
+            matrix.append(row)
+
+        matrix.append({"label": "Total Other Hours", "group": "total", "values": {}, "total": None})
+        matrix.append({"label": "Total Hours", "group": "grand_total", "values": {}, "total": None})
+
+        return matrix, employee_totals
+
+    first_matrix, first_totals = build_matrix("first_half")
+    second_matrix, second_totals = build_matrix("second_half")
+
+    month_options = (
+        TimesheetUpload.objects.values_list("year", "month")
+        .distinct()
+        .order_by("-year", "-month")[:12]
+    )
+    if (year, month) not in month_options:
+        month_options = [(year, month)] + list(month_options)
+
     context = {
-        "period": period,
         "employees": employees,
-        "category_rows": category_rows,
-        "employee_totals": employee_totals,
-        "recent_periods": recent_periods,
+        "month_label": _month_label(year, month),
+        "month_param": f"{year}-{month:02d}",
+        "month_options": month_options,
+        "first_matrix": first_matrix,
+        "second_matrix": second_matrix,
+        "first_totals": first_totals,
+        "second_totals": second_totals,
     }
     return render(request, "reviews/managing_partner/category_summary.html", context)
 
@@ -666,47 +802,37 @@ def category_summary(request, period_id=None):
 @login_required
 @payroll_partner_required
 def payroll_dashboard(request):
-    """Payroll Partner dashboard."""
-    # Get recent expense months
-    recent_months = ExpenseMonth.objects.order_by("-year", "-month")[:6]
-    current_month = ExpenseMonth.get_current_month()
-    
-    # Get selected month
-    month_id = request.GET.get("month")
-    if month_id:
-        selected_month = ExpenseMonth.objects.filter(pk=month_id).first()
-    else:
-        selected_month = current_month
-    
-    # Get expense summary for selected month
+    """Partner dashboard."""
+    year, month = _parse_month_param(request.GET.get("month"))
+    months = (
+        TimesheetUpload.objects.values_list("year", "month")
+        .distinct()
+        .order_by("-year", "-month")[:6]
+    )
+    if (year, month) not in months:
+        months = [(year, month)] + list(months)
+
+    employees = _active_employees()
     expense_summary = []
-    if selected_month:
-        employees = User.objects.filter(
-            is_active=True,
-            groups__name="employees"
-        ).select_related("profile").distinct().order_by("last_name", "first_name")
-        
-        for emp in employees:
-            try:
-                report = ExpenseReport.objects.get(employee=emp, month=selected_month)
-                expense_summary.append({
-                    "employee": emp,
-                    "report": report,
-                    "total": report.grand_total,
-                    "status": report.status,
-                })
-            except ExpenseReport.DoesNotExist:
-                expense_summary.append({
-                    "employee": emp,
-                    "report": None,
-                    "total": Decimal("0"),
-                    "status": "MISSING",
-                })
-    
+    for emp in employees:
+        upload = _latest_upload_for_user(emp, year, month)
+        if upload:
+            total = upload.parsed_json.get("expenses", {}).get("total_expenses", 0)
+            status = upload.status
+        else:
+            total = 0
+            status = "MISSING"
+        expense_summary.append({
+            "employee": emp,
+            "upload": upload,
+            "total": total,
+            "status": status,
+        })
+
     context = {
-        "recent_months": recent_months,
-        "selected_month": selected_month,
-        "current_month": current_month,
+        "month_options": months,
+        "selected_month": f"{year}-{month:02d}",
+        "selected_month_label": _month_label(year, month),
         "expense_summary": expense_summary,
     }
     return render(request, "reviews/payroll/dashboard.html", context)
@@ -714,211 +840,252 @@ def payroll_dashboard(request):
 
 @login_required
 @payroll_partner_required
-def payroll_export(request, month_id):
-    """
-    Export expense data for payroll processing.
-    Generates Excel/CSV with columns D through AS for expenses by person.
-    """
-    month = get_object_or_404(ExpenseMonth, pk=month_id)
-    
-    # Get all employees
-    employees = list(User.objects.filter(
-        is_active=True,
-        groups__name="employees"
-    ).select_related("profile").distinct().order_by("last_name", "first_name"))
-    
-    # Get all expense categories (ordered)
-    categories = list(ExpenseCategory.objects.filter(active=True).order_by("name"))
-    
-    # Build data: rows are categories, columns are employees
-    # Plus mileage as the last category
-    
+def payroll_export(request, year, month):
     format_type = request.GET.get("format", "xlsx")
-    
+    rows, flags = _build_payroll_rows(year, month)
+
+    if format_type == "flags":
+        return _render_flags_csv(flags, year, month)
     if format_type == "csv":
-        return _payroll_export_csv(month, employees, categories)
-    else:
-        return _payroll_export_xlsx(month, employees, categories)
+        return _render_payroll_csv(rows, year, month)
+    return _render_payroll_xlsx(rows, year, month)
 
 
-def _payroll_export_xlsx(month, employees, categories):
-    """Generate Excel export for payroll."""
+PAYROLL_COLUMNS = [
+    "Person",
+    "Initials",
+    "EE#",
+    "Reimbursed",
+    "MKT Banking — Chicago",
+    "MKT Banking — Chicago-Lead",
+    "MKT Banking — Atlanta",
+    "MKT Banking — Atlanta-Lead",
+    "MKT Banking — LAX",
+    "MKT Banking — LAX-Lead",
+    "MKT Existing — Chicago",
+    "MKT Existing — Chicago-Lead",
+    "MKT Existing — Atlanta",
+    "MKT Existing — Atlanta-Lead",
+    "MKT Existing — LAX",
+    "MKT Existing — LAX-Lead",
+    "MKT General — General",
+    "MKT General — General-Lead",
+    "MKT Strategics — Chicago",
+    "MKT Strategics — Chicago-Lead",
+    "MKT Strategics — Atlanta",
+    "MKT Strategics — Atlanta-Lead",
+    "MKT Strategics — LAX",
+    "MKT Strategics — LAX-Lead",
+    "MKT PEG — Chicago",
+    "MKT PEG — Chicago-Lead",
+    "MKT PEG — Atlanta",
+    "MKT PEG — Atlanta-Lead",
+    "MKT PEG — LAX",
+    "MKT PEG — LAX-Lead",
+    "Recr. — Meals",
+    "Recr. — Entertainment",
+    "Recr. — General",
+    "Training — Expenses",
+    "TKG — Meals",
+    "TKG — Entertainment",
+    "TKG — General",
+    "TKG — Travel",
+    "Office — Supplies",
+    "Computer — Expenses",
+    "Dues & Subscriptions",
+    "Phone",
+    "Other",
+    "Expenses — Total",
+    "Front Page — Reimb.",
+]
+
+
+NON_MARKETING_BUCKET_MAP = {
+    "Recruiting - Meals": "Recr. — Meals",
+    "Recruiting - Entertainment": "Recr. — Entertainment",
+    "Recruiting - General": "Recr. — General",
+    "Training": "Training — Expenses",
+    "Keystone - Meals": "TKG — Meals",
+    "Keystone - Entertainment": "TKG — Entertainment",
+    "Keystone - General": "TKG — General",
+    "Travel": "TKG — Travel",
+    "Office - Supplies": "Office — Supplies",
+    "Computer - Expenses": "Computer — Expenses",
+    "Dues & Subscriptions": "Dues & Subscriptions",
+    "Telecom - Phone": "Phone",
+    "Other": "Other",
+}
+
+
+def _build_payroll_rows(year, month):
+    employees = _active_employees()
+    rows = []
+    flags = []
+    threshold = Decimal(str(getattr(settings, "PAYROLL_FLAG_CELL_THRESHOLD", 500.0)))
+
+    for emp in employees:
+        upload = _latest_upload_for_user(emp, year, month)
+        row = {col: Decimal("0") for col in PAYROLL_COLUMNS}
+        row["Person"] = emp.get_full_name() or emp.email
+        row["Initials"] = emp.profile_or_none.initials if emp.profile_or_none else ""
+        row["EE#"] = emp.profile_or_none.employee_number if emp.profile_or_none else ""
+
+        employee_flags = []
+        if not upload:
+            employee_flags.append("MISSING_SUBMISSION")
+            rows.append(row)
+            flags.append(_flag_row(emp, year, month, employee_flags))
+            continue
+
+        if upload.has_blocking_errors:
+            employee_flags.append("HAS_BLOCKING_ERRORS")
+
+        expenses = upload.parsed_json.get("expenses", {})
+        totals_by_bucket = expenses.get("totals_by_bucket", {})
+        items = expenses.get("items", [])
+
+        # Non-marketing buckets
+        for bucket, target in NON_MARKETING_BUCKET_MAP.items():
+            row[target] = Decimal(str(totals_by_bucket.get(bucket, 0)))
+
+        # Marketing allocations from items
+        unclassified = Decimal("0")
+        for item in items:
+            bucket = item.get("bucket")
+            if not bucket or not bucket.startswith("Marketing"):
+                continue
+            amount = Decimal(str(item.get("amount", 0)))
+            code = item.get("charge_code") or ""
+            column = _marketing_column_for_code(code)
+            if column:
+                row[column] += amount
+            else:
+                unclassified += amount
+
+        if unclassified > 0:
+            employee_flags.append("UNCLASSIFIED_MARKETING_CODE")
+
+        # Totals
+        expense_total = sum(row[col] for col in PAYROLL_COLUMNS if col not in ["Person", "Initials", "EE#", "Reimbursed", "Expenses — Total", "Front Page — Reimb."])
+        row["Expenses — Total"] = expense_total
+        row["Reimbursed"] = expense_total
+        row["Front Page — Reimb."] = expense_total
+
+        for col in PAYROLL_COLUMNS:
+            if isinstance(row[col], Decimal) and row[col] > threshold:
+                employee_flags.append(f"CELL_ABOVE_THRESHOLD:{col}")
+
+        rows.append(row)
+        if employee_flags:
+            flags.append(_flag_row(emp, year, month, employee_flags))
+
+    return rows, flags
+
+
+def _marketing_column_for_code(code):
+    code = (code or "").upper()
+    if not code:
+        return None
+
+    lead = "Lead" if "-LEAD" in code else "Other"
+    region = None
+    segment = None
+
+    if code.startswith("GEN"):
+        segment = "General"
+    elif "-BNK" in code:
+        segment = "Banking"
+    elif "-EXST" in code:
+        segment = "Existing"
+    elif "-STRAT" in code:
+        segment = "Strategics"
+    elif "-PEG" in code:
+        segment = "PEG"
+
+    if code.startswith("CHI"):
+        region = "Chicago"
+    elif code.startswith("ATL"):
+        region = "Atlanta"
+    elif code.startswith("LAX"):
+        region = "LAX"
+
+    if not segment:
+        return None
+    if segment == "General":
+        return f"MKT General — General{'' if lead == 'Other' else '-Lead'}"
+    if not region:
+        return None
+
+    label = f"MKT {segment} — {region}"
+    if lead == "Lead":
+        label = f"{label}-Lead"
+    return label
+
+
+def _render_payroll_csv(rows, year, month):
+    response = HttpResponse(content_type="text/csv")
+    filename = f"payroll_expenses_{year}_{month:02d}.csv"
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    writer = csv.writer(response)
+    writer.writerow(PAYROLL_COLUMNS)
+    for row in rows:
+        writer.writerow([_csv_value(row.get(col)) for col in PAYROLL_COLUMNS])
+    return response
+
+
+def _render_payroll_xlsx(rows, year, month):
     if not HAS_OPENPYXL:
         return HttpResponse("openpyxl not installed", status=500)
-    
+
     wb = Workbook()
     ws = wb.active
-    ws.title = f"Expenses {month.display_name}"
-    
-    # Styles
+    ws.title = "Payroll"
     header_font = Font(bold=True, size=11)
-    header_fill = PatternFill(start_color="1a1a2e", end_color="1a1a2e", fill_type="solid")
-    header_font_white = Font(bold=True, size=11, color="FFFFFF")
-    money_format = '"$"#,##0.00'
-    thin_border = Border(
-        left=Side(style='thin'),
-        right=Side(style='thin'),
-        top=Side(style='thin'),
-        bottom=Side(style='thin')
-    )
-    
-    # Header row
-    ws.cell(row=1, column=1, value="Category").font = header_font
-    ws.cell(row=1, column=1).fill = header_fill
-    ws.cell(row=1, column=1).font = header_font_white
-    
-    for col_idx, emp in enumerate(employees, start=2):
-        cell = ws.cell(row=1, column=col_idx)
-        cell.value = emp.get_full_name() or emp.email
-        cell.font = header_font_white
-        cell.fill = header_fill
-        cell.alignment = Alignment(horizontal="center")
-        ws.column_dimensions[get_column_letter(col_idx)].width = 15
-    
-    # Total column
-    total_col = len(employees) + 2
-    ws.cell(row=1, column=total_col, value="Total").font = header_font_white
-    ws.cell(row=1, column=total_col).fill = header_fill
-    
-    # Data rows - expense categories
-    current_row = 2
-    for cat in categories:
-        ws.cell(row=current_row, column=1, value=cat.name)
-        row_total = Decimal("0")
-        
-        for col_idx, emp in enumerate(employees, start=2):
-            try:
-                report = ExpenseReport.objects.get(employee=emp, month=month)
-                cat_total = report.items.filter(category=cat).aggregate(
-                    total=Sum("amount")
-                )["total"] or Decimal("0")
-            except ExpenseReport.DoesNotExist:
-                cat_total = Decimal("0")
-            
-            cell = ws.cell(row=current_row, column=col_idx, value=float(cat_total))
-            cell.number_format = money_format
-            cell.border = thin_border
-            row_total += cat_total
-        
-        # Row total
-        ws.cell(row=current_row, column=total_col, value=float(row_total)).number_format = money_format
-        current_row += 1
-    
-    # Mileage row
-    ws.cell(row=current_row, column=1, value="Mileage Reimbursement")
-    mileage_total = Decimal("0")
-    
-    for col_idx, emp in enumerate(employees, start=2):
-        try:
-            report = ExpenseReport.objects.get(employee=emp, month=month)
-            emp_mileage = report.total_mileage_amount
-        except ExpenseReport.DoesNotExist:
-            emp_mileage = Decimal("0")
-        
-        cell = ws.cell(row=current_row, column=col_idx, value=float(emp_mileage))
-        cell.number_format = money_format
-        cell.border = thin_border
-        mileage_total += emp_mileage
-    
-    ws.cell(row=current_row, column=total_col, value=float(mileage_total)).number_format = money_format
-    current_row += 1
-    
-    # Grand total row
-    ws.cell(row=current_row, column=1, value="GRAND TOTAL").font = header_font
-    
-    for col_idx, emp in enumerate(employees, start=2):
-        try:
-            report = ExpenseReport.objects.get(employee=emp, month=month)
-            emp_total = report.grand_total
-        except ExpenseReport.DoesNotExist:
-            emp_total = Decimal("0")
-        
-        cell = ws.cell(row=current_row, column=col_idx, value=float(emp_total))
-        cell.number_format = money_format
+    for col_idx, col in enumerate(PAYROLL_COLUMNS, start=1):
+        cell = ws.cell(row=1, column=col_idx, value=col)
         cell.font = header_font
-        cell.border = thin_border
-    
-    # Set column width for first column
-    ws.column_dimensions["A"].width = 25
-    
-    # Prepare response
+        ws.column_dimensions[get_column_letter(col_idx)].width = 18
+
+    for row_idx, row in enumerate(rows, start=2):
+        for col_idx, col in enumerate(PAYROLL_COLUMNS, start=1):
+            value = row.get(col)
+            if isinstance(value, Decimal):
+                value = float(value)
+            ws.cell(row=row_idx, column=col_idx, value=value)
+
     buffer = BytesIO()
     wb.save(buffer)
     buffer.seek(0)
-    
     response = HttpResponse(
         buffer.getvalue(),
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
-    filename = f"payroll_expenses_{month.year}_{month.month:02d}.xlsx"
+    filename = f"payroll_expenses_{year}_{month:02d}.xlsx"
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response
 
 
-def _payroll_export_csv(month, employees, categories):
-    """Generate CSV export for payroll."""
+def _render_flags_csv(flags, year, month):
     response = HttpResponse(content_type="text/csv")
-    filename = f"payroll_expenses_{month.year}_{month.month:02d}.csv"
+    filename = f"payroll_flags_{year}_{month:02d}.csv"
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
-    
     writer = csv.writer(response)
-    
-    # Header row
-    header = ["Category"] + [emp.get_full_name() or emp.email for emp in employees] + ["Total"]
-    writer.writerow(header)
-    
-    # Data rows - expense categories
-    for cat in categories:
-        row = [cat.name]
-        row_total = Decimal("0")
-        
-        for emp in employees:
-            try:
-                report = ExpenseReport.objects.get(employee=emp, month=month)
-                cat_total = report.items.filter(category=cat).aggregate(
-                    total=Sum("amount")
-                )["total"] or Decimal("0")
-            except ExpenseReport.DoesNotExist:
-                cat_total = Decimal("0")
-            
-            row.append(f"{cat_total:.2f}")
-            row_total += cat_total
-        
-        row.append(f"{row_total:.2f}")
-        writer.writerow(row)
-    
-    # Mileage row
-    mileage_row = ["Mileage Reimbursement"]
-    mileage_total = Decimal("0")
-    
-    for emp in employees:
-        try:
-            report = ExpenseReport.objects.get(employee=emp, month=month)
-            emp_mileage = report.total_mileage_amount
-        except ExpenseReport.DoesNotExist:
-            emp_mileage = Decimal("0")
-        
-        mileage_row.append(f"{emp_mileage:.2f}")
-        mileage_total += emp_mileage
-    
-    mileage_row.append(f"{mileage_total:.2f}")
-    writer.writerow(mileage_row)
-    
-    # Grand total row
-    total_row = ["GRAND TOTAL"]
-    grand_total = Decimal("0")
-    
-    for emp in employees:
-        try:
-            report = ExpenseReport.objects.get(employee=emp, month=month)
-            emp_total = report.grand_total
-        except ExpenseReport.DoesNotExist:
-            emp_total = Decimal("0")
-        
-        total_row.append(f"{emp_total:.2f}")
-        grand_total += emp_total
-    
-    total_row.append(f"{grand_total:.2f}")
-    writer.writerow(total_row)
-    
+    writer.writerow(["Email", "Name", "Month", "Flags"])
+    for row in flags:
+        writer.writerow([row["email"], row["name"], row["month"], "; ".join(row["flags"])])
     return response
+
+
+def _flag_row(emp, year, month, flags):
+    return {
+        "email": emp.email,
+        "name": emp.get_full_name() or emp.email,
+        "month": f"{year}-{month:02d}",
+        "flags": flags,
+    }
+
+
+def _csv_value(value):
+    if isinstance(value, Decimal):
+        return f"{value:.2f}"
+    return value

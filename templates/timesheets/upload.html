@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Timesheet - Keystone{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="bi bi-upload me-2" style="opacity: 0.7;"></i>Upload Timesheet</h1>
+        <p class="text-muted mb-0">Upload your completed workbook to generate your summary.</p>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header">Upload Workbook</div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">Timesheet Workbook (.xlsx)</label>
+                        <input class="form-control" type="file" name="timesheet_file" accept=".xlsx" required>
+                        <div class="form-text text-muted mt-1">
+                            Only .xlsx files. Max {{ TIMESHEET_UPLOAD_MAX_MB|default:25 }} MB.
+                        </div>
+                    </div>
+                    <button class="btn btn-primary">
+                        <i class="bi bi-cloud-arrow-up me-2"></i>Upload and Parse
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">Required Sheets</div>
+            <div class="card-body">
+                <ul class="mb-0 text-muted">
+                    <li>Time-1st half of month</li>
+                    <li>Time-2nd half of month</li>
+                    <li>Expenses-Main</li>
+                    <li>Expenses-Additional</li>
+                    <li>Auto Log 655</li>
+                    <li>Validations</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header">Latest Upload</div>
+            <div class="card-body">
+                {% if latest_upload %}
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <div>
+                        <div class="fw-semibold">{{ latest_upload.year }}-{{ latest_upload.month|stringformat:"02d" }}</div>
+                        <div class="text-muted small">Uploaded {{ latest_upload.uploaded_at|date:"M j, Y g:i A" }}</div>
+                    </div>
+                    <span class="badge-status badge-{{ latest_upload.status|lower }}">{{ latest_upload.get_status_display }}</span>
+                </div>
+                <div class="d-flex gap-2 mt-3">
+                    <a href="{% url 'timesheets:upload_summary' latest_upload.pk %}" class="btn btn-secondary btn-sm">
+                        <i class="bi bi-eye me-1"></i>View Summary
+                    </a>
+                    <a href="{% url 'timesheets:upload_download' latest_upload.pk %}" class="btn btn-secondary btn-sm">
+                        <i class="bi bi-download me-1"></i>Download
+                    </a>
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">No uploads yet for the current month.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

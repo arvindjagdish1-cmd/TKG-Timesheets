@@ -78,6 +78,13 @@ class User(AbstractBaseUser, PermissionsMixin):
         """Return full name if available, otherwise email."""
         return self.get_full_name()
 
+    @property
+    def profile_or_none(self):
+        try:
+            return self.profile
+        except EmployeeProfile.DoesNotExist:
+            return None
+
 
 class EmployeeProfile(models.Model):
     """
@@ -99,8 +106,26 @@ class EmployeeProfile(models.Model):
         blank=True,
         help_text="Internal employee identifier (optional).",
     )
+    employee_number = models.CharField(
+        "employee number",
+        max_length=50,
+        blank=True,
+        help_text="Employee number used in payroll exports (optional).",
+    )
+    initials = models.CharField(
+        "initials",
+        max_length=10,
+        blank=True,
+        unique=True,
+        help_text="Unique initials used in partner reporting.",
+    )
     title = models.CharField("job title", max_length=150, blank=True)
     department = models.CharField("department", max_length=100, blank=True)
+    active = models.BooleanField(
+        "active",
+        default=True,
+        help_text="Whether the employee is active for reporting.",
+    )
 
     # For sorting in export PDFs
     seniority_order = models.PositiveIntegerField(

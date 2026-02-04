@@ -13,7 +13,15 @@ class EmployeeProfileInline(admin.StackedInline):
     fk_name = "user"
     fieldsets = (
         (None, {
-            "fields": ("employee_id", "title", "department", "seniority_order")
+            "fields": (
+                "employee_id",
+                "employee_number",
+                "initials",
+                "title",
+                "department",
+                "active",
+                "seniority_order",
+            )
         }),
         ("Employment Status", {
             "fields": ("hire_date", "termination_date", "is_exempt"),
@@ -83,18 +91,42 @@ class EmployeeProfileAdmin(SimpleHistoryAdmin):
     list_display = (
         "user",
         "employee_id",
+        "employee_number",
+        "initials",
         "title",
         "department",
         "seniority_order",
+        "active",
         "is_active_employee",
     )
     list_filter = ("department", "is_exempt")
-    search_fields = ("user__email", "user__first_name", "user__last_name", "employee_id")
+    search_fields = (
+        "user__email",
+        "user__first_name",
+        "user__last_name",
+        "employee_id",
+        "employee_number",
+        "initials",
+    )
     ordering = ("seniority_order", "user__last_name")
     raw_id_fields = ("user",)
 
     fieldsets = (
-        (None, {"fields": ("user", "employee_id", "title", "department", "seniority_order")}),
+        (
+            None,
+            {
+                "fields": (
+                    "user",
+                    "employee_id",
+                    "employee_number",
+                    "initials",
+                    "title",
+                    "department",
+                    "active",
+                    "seniority_order",
+                )
+            },
+        ),
         ("Employment Status", {"fields": ("hire_date", "termination_date", "is_exempt")}),
         ("Contact", {"fields": ("phone", "emergency_contact_name", "emergency_contact_phone")}),
         ("Expense Settings", {"fields": ("mileage_rate",)}),
