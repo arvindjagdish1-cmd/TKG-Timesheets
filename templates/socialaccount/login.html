@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Redirecting…</title>
-    {% provider_login_url provider.id as provider_url %}
+    {% provider_login_url provider.id process="login" as provider_url %}
     <meta http-equiv="refresh" content="0; url={{ provider_url }}">
 </head>
 <body>
