@@ -36,6 +36,7 @@ urlpatterns = [
     path("partner/category/", views.category_summary, name="category_summary"),
     path("partner/category/<int:period_id>/", views.category_summary, name="category_summary_period"),
     path("partner/employees/", views.employee_summary, name="employee_summary"),
+    path("partner/expenses/", views.employee_expenses, name="employee_expenses"),
     path("partner/export/<int:year>/<int:month>/", views.partner_export_xlsx, name="partner_export_xlsx"),
 
     # Payroll Partner Views

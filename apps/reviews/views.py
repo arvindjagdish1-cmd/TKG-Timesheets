@@ -806,46 +806,167 @@ def category_summary(request, period_id=None):
 
 
 # =============================================================================
-# EMPLOYEE SUMMARY VIEW
+# EMPLOYEE SUMMARY VIEWS (Hours + Expenses)
 # =============================================================================
+
+_EMPLOYEE_MARKETING_CODES = [
+    ("GEN", "Marketing - General/Other"),
+    ("CHI-STRAT", "Chicago - Strategics"),
+    ("CHI-BNK", "Chicago - Banks"),
+    ("CHI-EXST", "Chicago - Existing"),
+    ("CHI-PEG", "Chicago - PE"),
+    ("ATL-STRAT", "Atlanta - Strategics"),
+    ("ATL-BNK", "Atlanta - Banks"),
+    ("ATL-EXST", "Atlanta - Existing"),
+    ("ATL-PEG", "Atlanta - PE"),
+    ("LAX-STRAT", "Los Angeles - Strategics"),
+    ("LAX-BNK", "Los Angeles - Banks"),
+    ("LAX-EXST", "Los Angeles - Existing"),
+    ("LAX-PEG", "Los Angeles - PE"),
+]
+
+_EMPLOYEE_OTHER_CODES = [
+    ("ADM", "Administration"),
+    ("REC", "Recruiting"),
+    ("TRN", "Training"),
+    ("MTG", "Meetings"),
+    ("PTO", "PTO"),
+    ("HOL+OFF", "Other Paid Time Off"),
+]
+
+
+def _build_employee_hours_half(employees, uploads_by_user, half_key):
+    """Build employee-hours matrix for one half-month."""
+    columns = [("client", "Client Hours")]
+    columns += [("mktg:" + code, label) for code, label in _EMPLOYEE_MARKETING_CODES]
+    columns += [("other:" + code, label) for code, label in _EMPLOYEE_OTHER_CODES]
+
+    rows = []
+    column_totals = {col_id: Decimal("0") for col_id, _ in columns}
+
+    for emp in employees:
+        upload = uploads_by_user.get(emp.id)
+        row_values = {}
+        row_total = Decimal("0")
+
+        if upload:
+            time_data = upload.parsed_json.get("time", {}).get(half_key, {})
+
+            client_totals = time_data.get("totals_by_client_code", {})
+            row_values["client"] = sum(Decimal(str(v)) for v in client_totals.values())
+
+            mktg_totals = time_data.get("totals_by_marketing_bucket", {})
+            for code, _ in _EMPLOYEE_MARKETING_CODES:
+                row_values["mktg:" + code] = Decimal(str(mktg_totals.get(code, 0)))
+
+            other_totals = time_data.get("totals_by_other_hours", {})
+            for code, _ in _EMPLOYEE_OTHER_CODES:
+                if code == "HOL+OFF":
+                    row_values["other:" + code] = (
+                        Decimal(str(other_totals.get("HOL", 0)))
+                        + Decimal(str(other_totals.get("OFF", 0)))
+                    )
+                else:
+                    row_values["other:" + code] = Decimal(str(other_totals.get(code, 0)))
+
+        for col_id, _ in columns:
+            v = row_values.get(col_id, Decimal("0"))
+            column_totals[col_id] += v
+            row_total += v
+
+        rows.append({
+            "employee": emp,
+            "values": row_values,
+            "total": row_total,
+            "missing": upload is None,
+        })
+
+    grand_total = sum(column_totals.values())
+    return columns, rows, column_totals, grand_total
+
 
 @login_required
 @managing_partner_required
 def employee_summary(request):
     """
-    Employee summary: employees as rows, aggregated Client Charges + individual
-    non-client charge codes as columns.
+    Employee hours summary split by half-month: employees as rows,
+    aggregated Client Hours + individual non-client charge codes as columns.
     """
     year, month = _parse_month_param(request.GET.get("month"))
     employees = _active_employees()
 
-    marketing_codes = [
-        ("GEN", "Marketing - General/Other"),
-        ("CHI-STRAT", "Chicago - Strategics"),
-        ("CHI-BNK", "Chicago - Banks"),
-        ("CHI-EXST", "Chicago - Existing"),
-        ("CHI-PEG", "Chicago - PE"),
-        ("ATL-STRAT", "Atlanta - Strategics"),
-        ("ATL-BNK", "Atlanta - Banks"),
-        ("ATL-EXST", "Atlanta - Existing"),
-        ("ATL-PEG", "Atlanta - PE"),
-        ("LAX-STRAT", "Los Angeles - Strategics"),
-        ("LAX-BNK", "Los Angeles - Banks"),
-        ("LAX-EXST", "Los Angeles - Existing"),
-        ("LAX-PEG", "Los Angeles - PE"),
-    ]
-    other_codes = [
-        ("ADM", "Administration"),
-        ("REC", "Recruiting"),
-        ("TRN", "Training"),
-        ("MTG", "Meetings"),
-        ("PTO", "PTO"),
-        ("HOL+OFF", "Other Paid Time Off"),
-    ]
+    uploads_by_user = {}
+    for emp in employees:
+        upload = _latest_upload_for_user(emp, year, month)
+        if upload:
+            uploads_by_user[emp.id] = upload
 
-    columns = [("client", "Client Charges")]
-    columns += [("mktg:" + code, label) for code, label in marketing_codes]
-    columns += [("other:" + code, label) for code, label in other_codes]
+    first_columns, first_rows, first_totals, first_grand = _build_employee_hours_half(
+        employees, uploads_by_user, "first_half"
+    )
+    second_columns, second_rows, second_totals, second_grand = _build_employee_hours_half(
+        employees, uploads_by_user, "second_half"
+    )
+
+    month_options = (
+        TimesheetUpload.objects.values_list("year", "month")
+        .distinct()
+        .order_by("-year", "-month")[:12]
+    )
+    if (year, month) not in month_options:
+        month_options = [(year, month)] + list(month_options)
+
+    from django.urls import reverse
+    export_url = reverse("reviews:partner_export_xlsx", args=[year, month])
+
+    context = {
+        "month_label": _month_label(year, month),
+        "month_param": f"{year}-{month:02d}",
+        "month_options": month_options,
+        "columns": first_columns,
+        "first_rows": first_rows,
+        "first_totals": first_totals,
+        "first_grand": first_grand,
+        "second_rows": second_rows,
+        "second_totals": second_totals,
+        "second_grand": second_grand,
+        "export_url": export_url,
+    }
+    return render(request, "reviews/managing_partner/employee_summary.html", context)
+
+
+_EXPENSE_BUCKET_LABELS = [
+    ("mktg_meals", "Marketing - Meals"),
+    ("mktg_ent", "Marketing - Entertainment"),
+    ("mktg_gen", "Marketing - General"),
+    ("recr_meals", "Recruiting - Meals"),
+    ("recr_ent", "Recruiting - Entertainment"),
+    ("recr_gen", "Recruiting - General"),
+    ("ks_meals", "Keystone - Meals"),
+    ("ks_ent", "Keystone - Entertainment"),
+    ("ks_gen", "Keystone - General"),
+    ("travel", "Travel"),
+    ("office", "Office - Supplies"),
+    ("computer", "Computer - Expenses"),
+    ("training", "Training"),
+    ("dues", "Dues & Subscriptions"),
+    ("phone", "Telecom - Phone"),
+    ("other", "Other"),
+]
+
+
+@login_required
+@managing_partner_required
+def employee_expenses(request):
+    """
+    Employee expenses summary: employees as rows, expense categories across
+    the top with Client Expenses aggregated.
+    """
+    year, month = _parse_month_param(request.GET.get("month"))
+    employees = _active_employees()
+
+    columns = [("client_exp", "Client Expenses")]
+    columns += list(_EXPENSE_BUCKET_LABELS)
 
     rows = []
     column_totals = {col_id: Decimal("0") for col_id, _ in columns}
@@ -855,28 +976,14 @@ def employee_summary(request):
         row_values = {}
         row_total = Decimal("0")
 
-        for half_key in ("first_half", "second_half"):
-            if not upload:
-                continue
-            time_data = upload.parsed_json.get("time", {}).get(half_key, {})
+        if upload:
+            expenses = upload.parsed_json.get("expenses", {})
+            totals_by_bucket = expenses.get("totals_by_bucket", {})
 
-            client_totals = time_data.get("totals_by_client_code", {})
-            client_sum = sum(Decimal(str(v)) for v in client_totals.values())
-            row_values["client"] = row_values.get("client", Decimal("0")) + client_sum
+            row_values["client_exp"] = Decimal(str(expenses.get("client_billed_total", 0)))
 
-            mktg_totals = time_data.get("totals_by_marketing_bucket", {})
-            for code, _ in marketing_codes:
-                col_id = "mktg:" + code
-                row_values[col_id] = row_values.get(col_id, Decimal("0")) + Decimal(str(mktg_totals.get(code, 0)))
-
-            other_totals = time_data.get("totals_by_other_hours", {})
-            for code, _ in other_codes:
-                col_id = "other:" + code
-                if code == "HOL+OFF":
-                    val = Decimal(str(other_totals.get("HOL", 0))) + Decimal(str(other_totals.get("OFF", 0)))
-                else:
-                    val = Decimal(str(other_totals.get(code, 0)))
-                row_values[col_id] = row_values.get(col_id, Decimal("0")) + val
+            for col_id, bucket_label in _EXPENSE_BUCKET_LABELS:
+                row_values[col_id] = Decimal(str(totals_by_bucket.get(bucket_label, 0)))
 
         for col_id, _ in columns:
             v = row_values.get(col_id, Decimal("0"))
@@ -909,7 +1016,7 @@ def employee_summary(request):
         "column_totals": column_totals,
         "grand_total": grand_total,
     }
-    return render(request, "reviews/managing_partner/employee_summary.html", context)
+    return render(request, "reviews/managing_partner/employee_expenses.html", context)
 
 
 # =============================================================================

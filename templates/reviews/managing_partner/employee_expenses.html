@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load timesheet_tags %}
 
-{% block title %}Employee Hours - {{ month_label }} - Keystone{% endblock %}
+{% block title %}Employee Expenses - {{ month_label }} - Keystone{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -51,24 +51,21 @@
         <nav aria-label="breadcrumb">
             <ol class="breadcrumb">
                 <li class="breadcrumb-item"><a href="{% url 'reviews:partner_dashboard' %}">Partner Dashboard</a></li>
-                <li class="breadcrumb-item active">Employee Hours</li>
+                <li class="breadcrumb-item active">Employee Expenses</li>
             </ol>
         </nav>
-        <h1>Employee Hours</h1>
+        <h1>Employee Expenses</h1>
         <p class="text-muted mb-0">{{ month_label }}</p>
     </div>
     <div class="d-flex gap-2">
-        <a href="{% url 'reviews:employee_expenses' %}?month={{ month_param }}" class="btn btn-secondary">
-            <i class="bi bi-wallet2 me-2"></i>Expense View
+        <a href="{% url 'reviews:employee_summary' %}?month={{ month_param }}" class="btn btn-secondary">
+            <i class="bi bi-people me-2"></i>Hours View
         </a>
         <a href="{% url 'reviews:category_summary' %}?month={{ month_param }}" class="btn btn-secondary">
             <i class="bi bi-grid-3x3 me-2"></i>Category View
         </a>
         <a href="{% url 'reviews:daily_summary' %}?month={{ month_param }}" class="btn btn-secondary">
             <i class="bi bi-calendar3 me-2"></i>Daily View
-        </a>
-        <a href="{{ export_url }}" class="btn btn-success">
-            <i class="bi bi-file-earmark-excel me-2"></i>Export Excel
         </a>
     </div>
 </div>
@@ -95,49 +92,8 @@
     </div>
 </div>
 
-<div class="card mb-4">
-    <div class="card-header">Period One (Days 1–15)</div>
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table summary-table mb-0">
-                <thead>
-                    <tr>
-                        <th class="employee-header" style="min-width: 180px;">Employee</th>
-                        {% for col_id, col_label in columns %}
-                        <th class="text-center">{{ col_label }}</th>
-                        {% endfor %}
-                        <th class="total-cell text-center">Total</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in first_rows %}
-                    <tr>
-                        <td class="employee-cell {% if row.missing %}missing-ts{% endif %}">
-                            {{ row.employee.get_full_name|default:row.employee.email }}
-                        </td>
-                        {% for col_id, col_label in columns %}
-                        <td>{{ row.values|get_item:col_id|zero_dash }}</td>
-                        {% endfor %}
-                        <td class="total-cell">{{ row.total|zero_dash }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-                <tfoot class="table-light">
-                    <tr>
-                        <th class="employee-header">Total</th>
-                        {% for col_id, col_label in columns %}
-                        <th class="text-center">{{ first_totals|get_item:col_id|zero_dash }}</th>
-                        {% endfor %}
-                        <th class="total-cell text-center">{{ first_grand|zero_dash }}</th>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
-    </div>
-</div>
-
 <div class="card">
-    <div class="card-header">Period Two (Days 16–End)</div>
+    <div class="card-header">Full Month Expenses by Employee</div>
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table summary-table mb-0">
@@ -151,7 +107,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for row in second_rows %}
+                    {% for row in rows %}
                     <tr>
                         <td class="employee-cell {% if row.missing %}missing-ts{% endif %}">
                             {{ row.employee.get_full_name|default:row.employee.email }}
@@ -167,9 +123,9 @@
                     <tr>
                         <th class="employee-header">Total</th>
                         {% for col_id, col_label in columns %}
-                        <th class="text-center">{{ second_totals|get_item:col_id|zero_dash }}</th>
+                        <th class="text-center">{{ column_totals|get_item:col_id|zero_dash }}</th>
                         {% endfor %}
-                        <th class="total-cell text-center">{{ second_grand|zero_dash }}</th>
+                        <th class="total-cell text-center">{{ grand_total|zero_dash }}</th>
                     </tr>
                 </tfoot>
             </table>
