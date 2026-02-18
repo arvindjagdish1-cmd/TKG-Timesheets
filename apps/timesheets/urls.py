@@ -7,6 +7,7 @@ app_name = "timesheets"
 urlpatterns = [
     # Dashboard
     path("", views.dashboard, name="dashboard"),
+    path("uploads/", views.upload_list, name="upload_list"),
     path("upload/", views.upload_timesheet, name="upload_timesheet"),
     path("upload/<int:pk>/", views.upload_summary, name="upload_summary"),
     path("upload/<int:pk>/submit/", views.upload_submit, name="upload_submit"),

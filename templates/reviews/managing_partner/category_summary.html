@@ -68,6 +68,12 @@
         <a href="{% url 'reviews:daily_summary' %}?month={{ month_param }}" class="btn btn-secondary">
             <i class="bi bi-calendar3 me-2"></i>Daily View
         </a>
+        <a href="{% url 'reviews:employee_summary' %}?month={{ month_param }}" class="btn btn-secondary">
+            <i class="bi bi-people me-2"></i>Employee View
+        </a>
+        <a href="{{ export_url }}" class="btn btn-success">
+            <i class="bi bi-file-earmark-excel me-2"></i>Export Excel
+        </a>
     </div>
 </div>
 
@@ -127,9 +133,9 @@
                     <tr>
                         <td class="category-cell">{{ row.label }}</td>
                         {% for emp in employees %}
-                        <td>{{ row.values|get_item:emp.id|floatformat:1|default:"-" }}</td>
+                        <td>{{ row.values|get_item:emp.id|zero_dash }}</td>
                         {% endfor %}
-                        <td class="total-cell">{{ row.total|floatformat:1|default:"-" }}</td>
+                        <td class="total-cell">{{ row.total|zero_dash }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -172,9 +178,9 @@
                     <tr>
                         <td class="category-cell">{{ row.label }}</td>
                         {% for emp in employees %}
-                        <td>{{ row.values|get_item:emp.id|floatformat:1|default:"-" }}</td>
+                        <td>{{ row.values|get_item:emp.id|zero_dash }}</td>
                         {% endfor %}
-                        <td class="total-cell">{{ row.total|floatformat:1|default:"-" }}</td>
+                        <td class="total-cell">{{ row.total|zero_dash }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

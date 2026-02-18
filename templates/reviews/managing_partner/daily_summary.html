@@ -84,6 +84,12 @@
         <a href="{% url 'reviews:category_summary' %}?month={{ month_param }}" class="btn btn-secondary">
             <i class="bi bi-grid-3x3 me-2"></i>Category View
         </a>
+        <a href="{% url 'reviews:employee_summary' %}?month={{ month_param }}" class="btn btn-secondary">
+            <i class="bi bi-people me-2"></i>Employee View
+        </a>
+        <a href="{{ export_url }}" class="btn btn-success">
+            <i class="bi bi-file-earmark-excel me-2"></i>Export Excel
+        </a>
     </div>
 </div>
 

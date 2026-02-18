@@ -122,12 +122,11 @@ def generate_timesheet_exports(request):
 
     timesheets = Timesheet.objects.filter(
         period__in=periods,
-        status=Timesheet.Status.APPROVED
+        status__in=[Timesheet.Status.APPROVED, Timesheet.Status.SUBMITTED],
     ).select_related("employee").order_by("employee__last_name", "employee__first_name")
 
     if not timesheets.exists():
-        messages.warning(request, "No approved timesheets found for the selected period. "
-                         "Timesheets must be submitted and approved before they can be exported.")
+        messages.warning(request, "No submitted or approved timesheets found for the selected period.")
         return redirect("exports:dashboard")
 
     generated_files = []
@@ -210,14 +209,13 @@ def generate_expense_exports(request):
 
     reports = ExpenseReport.objects.filter(
         month__in=months,
-        status=ExpenseReport.Status.APPROVED
+        status__in=[ExpenseReport.Status.APPROVED, ExpenseReport.Status.SUBMITTED],
     ).select_related("employee")
 
     reports = reports.order_by("employee__last_name", "employee__first_name")
 
     if not reports.exists():
-        messages.warning(request, "No approved expense reports found for the selected month. "
-                         "Expense reports must be submitted and approved before they can be exported.")
+        messages.warning(request, "No submitted or approved expense reports found for the selected month.")
         return redirect("exports:dashboard")
 
     generated_files = []

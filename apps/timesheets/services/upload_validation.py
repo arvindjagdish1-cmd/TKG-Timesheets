@@ -233,7 +233,7 @@ def _validate_expenses(parsed, issues):
         if not item.get("charge_code"):
             _add_issue(
                 issues,
-                ERROR,
+                WARN,
                 "EXPENSE_MISSING_CHARGE_CODE",
                 "Expense amount entered without a charge code.",
                 location=f"{item.get('sheet')}!V{item.get('row')}",
@@ -242,7 +242,7 @@ def _validate_expenses(parsed, issues):
         if not item.get("date"):
             _add_issue(
                 issues,
-                ERROR,
+                WARN,
                 "EXPENSE_MISSING_DATE",
                 "Expense amount entered without a date.",
                 location=f"{item.get('sheet')}!A{item.get('row')}",
@@ -251,7 +251,7 @@ def _validate_expenses(parsed, issues):
         if not item.get("description"):
             _add_issue(
                 issues,
-                ERROR,
+                WARN,
                 "EXPENSE_MISSING_DESCRIPTION",
                 "Expense amount entered without a description.",
                 location=f"{item.get('sheet')}!B{item.get('row')}",
@@ -262,7 +262,7 @@ def _validate_expenses(parsed, issues):
         if charge_code and expected_codes and charge_code not in expected_codes:
             _add_issue(
                 issues,
-                ERROR,
+                WARN,
                 "EXPENSE_UNKNOWN_CHARGE_CODE",
                 f"Charge code {charge_code} does not match any time sheet line.",
                 location=f"{item.get('sheet')}!V{item.get('row')}",
@@ -289,7 +289,7 @@ def _validate_cross_checks(parsed, issues):
     if abs(marketing_code_total - marketing_total) > tolerance:
         _add_issue(
             issues,
-            ERROR,
+            WARN,
             "EXPENSE_MARKETING_ALLOCATION_MISMATCH",
             "Marketing expenses do not reconcile with marketing charge codes.",
             location="Expenses-Main/Additional",
@@ -301,7 +301,7 @@ def _validate_cross_checks(parsed, issues):
         if abs(client_code_total - client_billed_total) > tolerance:
             _add_issue(
                 issues,
-                ERROR,
+                WARN,
                 "EXPENSE_CLIENT_BILLED_MISMATCH",
                 "Client-billed expenses do not reconcile with client charge codes.",
                 location="Expenses-Main/Additional",
@@ -312,7 +312,7 @@ def _validate_cross_checks(parsed, issues):
     if abs(internal_code_total - keystone_paid_total) > tolerance:
         _add_issue(
             issues,
-            ERROR,
+            WARN,
             "EXPENSE_KEYSTONE_PAID_MISMATCH",
             "Keystone-paid expenses do not reconcile with internal codes.",
             location="Expenses-Main/Additional",
@@ -323,7 +323,7 @@ def _validate_cross_checks(parsed, issues):
     if abs(all_code_total - total_expenses) > tolerance:
         _add_issue(
             issues,
-            ERROR,
+            WARN,
             "EXPENSE_TOTAL_MISMATCH",
             "Total expenses do not reconcile with coded expenses.",
             location="Expenses-Main/Additional",

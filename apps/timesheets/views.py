@@ -38,10 +38,9 @@ def dashboard(request):
         month=current_month,
     ).order_by("-uploaded_at").first()
 
-    # Get user's timesheets (current and recent)
-    timesheets = Timesheet.objects.filter(employee=user).select_related("period").order_by(
-        "-period__year", "-period__month", "-period__half"
-    )[:6]
+    recent_uploads = TimesheetUpload.objects.filter(
+        user=user,
+    ).order_by("-uploaded_at")[:6]
 
     # Get user's expense reports (current and recent)
     expense_reports = ExpenseReport.objects.filter(employee=user).select_related("month").order_by(
@@ -67,7 +66,7 @@ def dashboard(request):
     context = {
         "current_timesheet": current_timesheet,
         "current_expense": current_expense,
-        "timesheets": timesheets,
+        "recent_uploads": recent_uploads,
         "expense_reports": expense_reports,
         "current_ts_period": current_ts_period,
         "current_expense_month": current_expense_month,
@@ -133,6 +132,35 @@ def upload_timesheet(request):
         "TIMESHEET_UPLOAD_MAX_MB": getattr(settings, "TIMESHEET_UPLOAD_MAX_MB", 25),
     }
     return render(request, "timesheets/upload.html", context)
+
+
+@login_required
+def upload_list(request):
+    """List all of the current user's timesheet uploads starting from Jan 2026."""
+    uploads = (
+        TimesheetUpload.objects.filter(user=request.user, year__gte=2026)
+        .order_by("-year", "-month", "-uploaded_at")
+    )
+
+    rows = []
+    seen = set()
+    for u in uploads:
+        key = (u.year, u.month)
+        if key in seen:
+            continue
+        seen.add(key)
+        summary = u.parsed_json or {}
+        fh_hours = summary.get("time", {}).get("first_half", {}).get("total_hours", 0)
+        sh_hours = summary.get("time", {}).get("second_half", {}).get("total_hours", 0)
+        total_expenses = summary.get("expenses", {}).get("total_expenses", 0)
+        rows.append({
+            "upload": u,
+            "first_half_hours": fh_hours,
+            "second_half_hours": sh_hours,
+            "total_expenses": total_expenses,
+        })
+
+    return render(request, "timesheets/upload_list.html", {"rows": rows})
 
 
 @login_required

@@ -675,12 +675,12 @@
             </a>
 
             <div class="nav-section">Time</div>
-            <a href="{% url 'timesheets:upload_timesheet' %}" class="nav-link {% if 'upload' in request.path %}active{% endif %}">
+            <a href="{% url 'timesheets:upload_timesheet' %}" class="nav-link {% if request.resolver_match.url_name == 'upload_timesheet' %}active{% endif %}">
                 <i class="bi bi-cloud-arrow-up"></i> Upload Timesheet
             </a>
 
             <div class="nav-section">Submissions</div>
-            <a href="{% url 'timesheets:upload_timesheet' %}" class="nav-link {% if 'upload' in request.path %}active{% endif %}">
+            <a href="{% url 'timesheets:upload_list' %}" class="nav-link {% if request.resolver_match.url_name == 'upload_list' %}active{% endif %}">
                 <i class="bi bi-file-earmark-spreadsheet"></i> Uploads
             </a>
 

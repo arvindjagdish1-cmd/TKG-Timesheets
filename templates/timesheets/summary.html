@@ -177,7 +177,19 @@
                             {% empty %}
                             <tr><td colspan="2" class="text-muted text-center">No expense data.</td></tr>
                             {% endfor %}
+                            {% if summary.expenses.client_billed_total and summary.expenses.client_billed_total != 0 %}
+                            <tr>
+                                <td><span class="badge bg-primary bg-opacity-10 text-primary me-1">Client</span>Client Billed</td>
+                                <td class="text-end">${{ summary.expenses.client_billed_total|floatformat:2 }}</td>
+                            </tr>
+                            {% endif %}
                         </tbody>
+                        <tfoot class="table-light">
+                            <tr>
+                                <th>Total</th>
+                                <th class="text-end">${{ summary.expenses.total_expenses|default:0|floatformat:2 }}</th>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
             </div>
@@ -205,6 +217,12 @@
                             <tr><td colspan="2" class="text-muted text-center">No coded expenses.</td></tr>
                             {% endfor %}
                         </tbody>
+                        <tfoot class="table-light">
+                            <tr>
+                                <th>Total</th>
+                                <th class="text-end">${{ summary.expenses.total_expenses|default:0|floatformat:2 }}</th>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
             </div>

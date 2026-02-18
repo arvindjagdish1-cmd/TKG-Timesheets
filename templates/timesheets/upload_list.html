@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}My Uploads - Keystone Time & Expense{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="bi bi-file-earmark-spreadsheet me-2" style="opacity: 0.7;"></i>My Uploads</h1>
+        <p class="text-muted mb-0">All timesheet uploads from January 2026 onward</p>
+    </div>
+    <div>
+        <a href="{% url 'timesheets:upload_timesheet' %}" class="btn btn-primary">
+            <i class="bi bi-cloud-arrow-up me-2"></i>Upload New
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table mb-0">
+                <thead>
+                    <tr>
+                        <th>Period</th>
+                        <th>Status</th>
+                        <th class="text-end">1st Half Hours</th>
+                        <th class="text-end">2nd Half Hours</th>
+                        <th class="text-end">Expenses</th>
+                        <th>Uploaded</th>
+                        <th class="text-end">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr>
+                        <td>
+                            <span class="fw-medium">{{ row.upload.year }}-{{ row.upload.month|stringformat:"02d" }}</span>
+                        </td>
+                        <td>
+                            <span class="badge-status badge-{{ row.upload.status|lower }}">
+                                {{ row.upload.get_status_display }}
+                            </span>
+                            {% if row.upload.has_blocking_errors %}
+                            <span class="badge bg-danger ms-1" style="font-size: 0.65rem;">Errors</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end" style="font-family: var(--font-mono);">
+                            {{ row.first_half_hours|floatformat:1 }}
+                        </td>
+                        <td class="text-end" style="font-family: var(--font-mono);">
+                            {{ row.second_half_hours|floatformat:1 }}
+                        </td>
+                        <td class="text-end" style="font-family: var(--font-mono);">
+                            ${{ row.total_expenses|floatformat:2 }}
+                        </td>
+                        <td class="text-secondary">
+                            {{ row.upload.uploaded_at|date:"M j, Y g:i A" }}
+                        </td>
+                        <td class="text-end">
+                            <a href="{% url 'timesheets:upload_summary' row.upload.pk %}" class="btn btn-sm btn-secondary">
+                                <i class="bi bi-eye me-1"></i>View
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted">
+                            <i class="bi bi-inbox d-block h3 mb-2"></i>
+                            No uploads yet. Upload your timesheet workbook to get started.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

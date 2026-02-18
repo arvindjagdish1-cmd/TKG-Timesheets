@@ -634,6 +634,9 @@ def daily_summary(request, period_id=None):
     if (year, month) not in month_options:
         month_options = [(year, month)] + list(month_options)
 
+    from django.urls import reverse
+    export_url = reverse("reviews:partner_export_xlsx", args=[year, month])
+
     context = {
         "month_label": _month_label(year, month),
         "month_param": f"{year}-{month:02d}",
@@ -644,6 +647,7 @@ def daily_summary(request, period_id=None):
         "second_rows": build_rows(second_dates, "second_half"),
         "min_weekday_hours": float(min_weekday_hours),
         "high_hours_threshold": float(high_hours),
+        "export_url": export_url,
     }
     return render(request, "reviews/managing_partner/daily_summary.html", context)
 
@@ -711,8 +715,8 @@ def category_summary(request, period_id=None):
         matrix = []
         employee_totals = defaultdict(Decimal)
 
-        ordered_codes = [code for code in client_order_codes if code in client_codes]
-        ordered_codes += sorted([code for code in client_codes if code not in ordered_codes])
+        ordered_codes = [code for code in client_order_codes if code in client_codes and code and code != "0"]
+        ordered_codes += sorted([code for code in client_codes if code not in ordered_codes and code and code != "0"])
 
         for code in ordered_codes:
             mapping = next((c for c in client_order if c.code == code), None)
@@ -784,6 +788,9 @@ def category_summary(request, period_id=None):
     if (year, month) not in month_options:
         month_options = [(year, month)] + list(month_options)
 
+    from django.urls import reverse
+    export_url = reverse("reviews:partner_export_xlsx", args=[year, month])
+
     context = {
         "employees": employees,
         "month_label": _month_label(year, month),
@@ -793,8 +800,312 @@ def category_summary(request, period_id=None):
         "second_matrix": second_matrix,
         "first_totals": first_totals,
         "second_totals": second_totals,
+        "export_url": export_url,
     }
     return render(request, "reviews/managing_partner/category_summary.html", context)
+
+
+# =============================================================================
+# EMPLOYEE SUMMARY VIEW
+# =============================================================================
+
+@login_required
+@managing_partner_required
+def employee_summary(request):
+    """
+    Employee summary: employees as rows, aggregated Client Charges + individual
+    non-client charge codes as columns.
+    """
+    year, month = _parse_month_param(request.GET.get("month"))
+    employees = _active_employees()
+
+    marketing_codes = [
+        ("GEN", "Marketing - General/Other"),
+        ("CHI-STRAT", "Chicago - Strategics"),
+        ("CHI-BNK", "Chicago - Banks"),
+        ("CHI-EXST", "Chicago - Existing"),
+        ("CHI-PEG", "Chicago - PE"),
+        ("ATL-STRAT", "Atlanta - Strategics"),
+        ("ATL-BNK", "Atlanta - Banks"),
+        ("ATL-EXST", "Atlanta - Existing"),
+        ("ATL-PEG", "Atlanta - PE"),
+        ("LAX-STRAT", "Los Angeles - Strategics"),
+        ("LAX-BNK", "Los Angeles - Banks"),
+        ("LAX-EXST", "Los Angeles - Existing"),
+        ("LAX-PEG", "Los Angeles - PE"),
+    ]
+    other_codes = [
+        ("ADM", "Administration"),
+        ("REC", "Recruiting"),
+        ("TRN", "Training"),
+        ("MTG", "Meetings"),
+        ("PTO", "PTO"),
+        ("HOL+OFF", "Other Paid Time Off"),
+    ]
+
+    columns = [("client", "Client Charges")]
+    columns += [("mktg:" + code, label) for code, label in marketing_codes]
+    columns += [("other:" + code, label) for code, label in other_codes]
+
+    rows = []
+    column_totals = {col_id: Decimal("0") for col_id, _ in columns}
+
+    for emp in employees:
+        upload = _latest_upload_for_user(emp, year, month)
+        row_values = {}
+        row_total = Decimal("0")
+
+        for half_key in ("first_half", "second_half"):
+            if not upload:
+                continue
+            time_data = upload.parsed_json.get("time", {}).get(half_key, {})
+
+            client_totals = time_data.get("totals_by_client_code", {})
+            client_sum = sum(Decimal(str(v)) for v in client_totals.values())
+            row_values["client"] = row_values.get("client", Decimal("0")) + client_sum
+
+            mktg_totals = time_data.get("totals_by_marketing_bucket", {})
+            for code, _ in marketing_codes:
+                col_id = "mktg:" + code
+                row_values[col_id] = row_values.get(col_id, Decimal("0")) + Decimal(str(mktg_totals.get(code, 0)))
+
+            other_totals = time_data.get("totals_by_other_hours", {})
+            for code, _ in other_codes:
+                col_id = "other:" + code
+                if code == "HOL+OFF":
+                    val = Decimal(str(other_totals.get("HOL", 0))) + Decimal(str(other_totals.get("OFF", 0)))
+                else:
+                    val = Decimal(str(other_totals.get(code, 0)))
+                row_values[col_id] = row_values.get(col_id, Decimal("0")) + val
+
+        for col_id, _ in columns:
+            v = row_values.get(col_id, Decimal("0"))
+            column_totals[col_id] += v
+            row_total += v
+
+        rows.append({
+            "employee": emp,
+            "values": row_values,
+            "total": row_total,
+            "missing": upload is None,
+        })
+
+    grand_total = sum(column_totals.values())
+
+    month_options = (
+        TimesheetUpload.objects.values_list("year", "month")
+        .distinct()
+        .order_by("-year", "-month")[:12]
+    )
+    if (year, month) not in month_options:
+        month_options = [(year, month)] + list(month_options)
+
+    context = {
+        "month_label": _month_label(year, month),
+        "month_param": f"{year}-{month:02d}",
+        "month_options": month_options,
+        "columns": columns,
+        "rows": rows,
+        "column_totals": column_totals,
+        "grand_total": grand_total,
+    }
+    return render(request, "reviews/managing_partner/employee_summary.html", context)
+
+
+# =============================================================================
+# PARTNER EXCEL EXPORT
+# =============================================================================
+
+@login_required
+@managing_partner_required
+def partner_export_xlsx(request, year, month):
+    """Export the category and daily summary as a two-tab Excel workbook."""
+    if not HAS_OPENPYXL:
+        return HttpResponse("openpyxl not installed", status=500)
+
+    wb = Workbook()
+
+    employees = _active_employees()
+    last_day = monthrange(year, month)[1]
+
+    # --- Category Summary tab ---
+    ws_cat = wb.active
+    ws_cat.title = "Category Summary"
+    header_font = Font(bold=True, size=11)
+    header_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+
+    cat_headers = ["Category"] + [e.get_full_name() or e.email for e in employees] + ["Total"]
+    for col_idx, h in enumerate(cat_headers, 1):
+        cell = ws_cat.cell(row=1, column=col_idx, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+
+    uploads_by_user = {}
+    client_codes = set()
+    client_labels = {}
+    for emp in employees:
+        upload = _latest_upload_for_user(emp, year, month)
+        if upload:
+            uploads_by_user[emp.id] = upload
+            for half_key in ("first_half", "second_half"):
+                for line in upload.parsed_json.get("time", {}).get(half_key, {}).get("lines", []):
+                    if line.get("group") == "client" and line.get("charge_code"):
+                        code = line["charge_code"]
+                        client_codes.add(code)
+                        if code not in client_labels:
+                            client_labels[code] = line.get("label") or code
+
+    client_order = list(ClientMapping.objects.filter(active=True).order_by("sort_order", "display_name"))
+    client_order_codes = [c.code for c in client_order]
+    ordered_client_codes = [c for c in client_order_codes if c in client_codes and c and c != "0"]
+    ordered_client_codes += sorted([c for c in client_codes if c not in ordered_client_codes and c and c != "0"])
+
+    marketing_rows_def = [
+        ("Marketing - General/Other", "GEN"),
+        ("Chicago - Strategics", "CHI-STRAT"),
+        ("Chicago - Banks", "CHI-BNK"),
+        ("Chicago - Existing", "CHI-EXST"),
+        ("Chicago - PE", "CHI-PEG"),
+        ("Atlanta - Strategics", "ATL-STRAT"),
+        ("Atlanta - Banks", "ATL-BNK"),
+        ("Atlanta - Existing", "ATL-EXST"),
+        ("Atlanta - PE", "ATL-PEG"),
+        ("Los Angeles - Strategics", "LAX-STRAT"),
+        ("Los Angeles - Banks", "LAX-BNK"),
+        ("Los Angeles - Existing", "LAX-EXST"),
+        ("Los Angeles - PE", "LAX-PEG"),
+    ]
+    other_rows_def = [
+        ("Administration", "ADM"),
+        ("Recruiting", "REC"),
+        ("Training", "TRN"),
+        ("Meetings", "MTG"),
+        ("PTO", "PTO"),
+        ("Other Paid Time Off", "HOL+OFF"),
+    ]
+
+    def _write_cat_half(ws, start_row, half_key, half_label):
+        row_idx = start_row
+        section_font = Font(bold=True, size=10)
+        ws.cell(row=row_idx, column=1, value=f"--- {half_label} ---").font = section_font
+        row_idx += 1
+
+        ws.cell(row=row_idx, column=1, value="CLIENT WORK").font = section_font
+        row_idx += 1
+
+        for code in ordered_client_codes:
+            mapping = next((c for c in client_order if c.code == code), None)
+            label = mapping.display_name if mapping else client_labels.get(code, code)
+            ws.cell(row=row_idx, column=1, value=label)
+            row_total = Decimal("0")
+            for ci, emp in enumerate(employees, 2):
+                upload = uploads_by_user.get(emp.id)
+                hours = Decimal("0")
+                if upload:
+                    hours = Decimal(str(upload.parsed_json.get("time", {}).get(half_key, {}).get("totals_by_client_code", {}).get(code, 0)))
+                ws.cell(row=row_idx, column=ci, value=float(hours))
+                row_total += hours
+            ws.cell(row=row_idx, column=len(employees) + 2, value=float(row_total))
+            row_idx += 1
+
+        ws.cell(row=row_idx, column=1, value="MARKETING").font = section_font
+        row_idx += 1
+
+        for label, code in marketing_rows_def:
+            ws.cell(row=row_idx, column=1, value=label)
+            row_total = Decimal("0")
+            for ci, emp in enumerate(employees, 2):
+                upload = uploads_by_user.get(emp.id)
+                hours = Decimal("0")
+                if upload:
+                    hours = Decimal(str(upload.parsed_json.get("time", {}).get(half_key, {}).get("totals_by_marketing_bucket", {}).get(code, 0)))
+                ws.cell(row=row_idx, column=ci, value=float(hours))
+                row_total += hours
+            ws.cell(row=row_idx, column=len(employees) + 2, value=float(row_total))
+            row_idx += 1
+
+        ws.cell(row=row_idx, column=1, value="OTHER HOURS").font = section_font
+        row_idx += 1
+
+        for label, code in other_rows_def:
+            ws.cell(row=row_idx, column=1, value=label)
+            row_total = Decimal("0")
+            for ci, emp in enumerate(employees, 2):
+                upload = uploads_by_user.get(emp.id)
+                hours = Decimal("0")
+                if upload:
+                    other_totals = upload.parsed_json.get("time", {}).get(half_key, {}).get("totals_by_other_hours", {})
+                    if code == "HOL+OFF":
+                        hours = Decimal(str(other_totals.get("HOL", 0))) + Decimal(str(other_totals.get("OFF", 0)))
+                    else:
+                        hours = Decimal(str(other_totals.get(code, 0)))
+                ws.cell(row=row_idx, column=ci, value=float(hours))
+                row_total += hours
+            ws.cell(row=row_idx, column=len(employees) + 2, value=float(row_total))
+            row_idx += 1
+
+        return row_idx
+
+    next_row = _write_cat_half(ws_cat, 2, "first_half", "Period One (Days 1–15)")
+    next_row += 1
+    _write_cat_half(ws_cat, next_row, "second_half", "Period Two (Days 16–End)")
+
+    ws_cat.column_dimensions["A"].width = 30
+    for ci in range(2, len(employees) + 3):
+        ws_cat.column_dimensions[get_column_letter(ci)].width = 14
+
+    # --- Daily Summary tab ---
+    ws_daily = wb.create_sheet("Daily Summary")
+
+    first_dates = [date(year, month, d) for d in range(1, 16)]
+    second_dates = [date(year, month, d) for d in range(16, last_day + 1)]
+
+    def _write_daily_half(ws, start_row, dates, half_key, half_label):
+        row_idx = start_row
+        section_font = Font(bold=True, size=10)
+        ws.cell(row=row_idx, column=1, value=half_label).font = section_font
+        row_idx += 1
+
+        ws.cell(row=row_idx, column=1, value="Employee").font = Font(bold=True)
+        for di, d in enumerate(dates, 2):
+            cell = ws.cell(row=row_idx, column=di, value=d.strftime("%m/%d"))
+            cell.font = Font(bold=True)
+        ws.cell(row=row_idx, column=len(dates) + 2, value="Total").font = Font(bold=True)
+        row_idx += 1
+
+        for emp in employees:
+            ws.cell(row=row_idx, column=1, value=emp.get_full_name() or emp.email)
+            upload = uploads_by_user.get(emp.id)
+            total = Decimal("0")
+            for di, d in enumerate(dates, 2):
+                hours = Decimal("0")
+                if upload:
+                    hours = Decimal(str(upload.parsed_json.get("time", {}).get(half_key, {}).get("daily_totals", {}).get(d.isoformat(), 0)))
+                ws.cell(row=row_idx, column=di, value=float(hours))
+                total += hours
+            ws.cell(row=row_idx, column=len(dates) + 2, value=float(total))
+            row_idx += 1
+
+        return row_idx
+
+    next_row = _write_daily_half(ws_daily, 1, first_dates, "first_half", "Period One (Days 1–15)")
+    next_row += 1
+    _write_daily_half(ws_daily, next_row, second_dates, "second_half", "Period Two (Days 16–End)")
+
+    ws_daily.column_dimensions["A"].width = 25
+    for ci in range(2, max(len(first_dates), len(second_dates)) + 3):
+        ws_daily.column_dimensions[get_column_letter(ci)].width = 10
+
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    response = HttpResponse(
+        buffer.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    filename = f"partner_summary_{year}_{month:02d}.xlsx"
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
 
 
 # =============================================================================
