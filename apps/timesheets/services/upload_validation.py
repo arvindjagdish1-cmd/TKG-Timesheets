@@ -203,6 +203,17 @@ def _validate_time_half(half_data, issues, sheet_name, enforce_minimums=True):
                 hint="Add a charge code for this row.",
             )
 
+        label = (line.get("label") or "").strip()
+        if group == "client" and row_total > 0 and charge_code and not label:
+            _add_issue(
+                issues,
+                ERROR,
+                "TIME_MISSING_CLIENT_NAME",
+                f"Client hours with charge code {charge_code} but no client name.",
+                location=f"{sheet_name}!A{line.get('row')}",
+                hint="Enter the client name for this row.",
+            )
+
         if group == "marketing" and row_total > 0:
             if not category or category.lower() == "select category":
                 _add_issue(

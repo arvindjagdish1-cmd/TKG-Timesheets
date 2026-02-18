@@ -1,6 +1,52 @@
 {% extends "base.html" %}
+{% load timesheet_tags %}
 
 {% block title %}Timesheet Summary - Keystone{% endblock %}
+
+{% block extra_css %}
+<style>
+    .issue-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    .issue-list li {
+        padding: 0.625rem 0.875rem;
+        border-radius: var(--radius-sm);
+        margin-bottom: 0.5rem;
+        font-size: 0.875rem;
+        line-height: 1.5;
+    }
+    .issue-list li:last-child {
+        margin-bottom: 0;
+    }
+    .issue-list .issue-error {
+        background: rgba(239, 68, 68, 0.1);
+        border-left: 3px solid #ef4444;
+        color: #fca5a5;
+    }
+    .issue-list .issue-error strong {
+        color: #f87171;
+    }
+    .issue-list .issue-warn {
+        background: rgba(234, 179, 8, 0.1);
+        border-left: 3px solid #eab308;
+        color: #fde68a;
+    }
+    .issue-list .issue-warn strong {
+        color: #fbbf24;
+    }
+    .issue-list .issue-location {
+        opacity: 0.6;
+        font-size: 0.8125rem;
+    }
+    .issue-list .issue-hint {
+        opacity: 0.5;
+        font-size: 0.8125rem;
+        margin-top: 0.125rem;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="page-header">
@@ -72,22 +118,28 @@
                         <tbody>
                             {% with fh=summary.time.first_half %}
                             {% for code, hours in fh.totals_by_client_code.items %}
+                            {% if hours and hours != 0 %}
                             <tr>
                                 <td><span class="badge bg-primary bg-opacity-10 text-primary me-1">Client</span>{{ code }}</td>
                                 <td class="text-end">{{ hours|floatformat:1 }}</td>
                             </tr>
+                            {% endif %}
                             {% endfor %}
                             {% for code, hours in fh.totals_by_marketing_bucket.items %}
+                            {% if hours and hours != 0 %}
                             <tr>
                                 <td><span class="badge bg-warning bg-opacity-10 text-warning me-1">Mktg</span>{{ code }}</td>
                                 <td class="text-end">{{ hours|floatformat:1 }}</td>
                             </tr>
+                            {% endif %}
                             {% endfor %}
                             {% for code, hours in fh.totals_by_other_hours.items %}
+                            {% if hours and hours != 0 %}
                             <tr>
                                 <td><span class="badge bg-secondary bg-opacity-10 text-secondary me-1">Other</span>{{ code }}</td>
                                 <td class="text-end">{{ hours|floatformat:1 }}</td>
                             </tr>
+                            {% endif %}
                             {% endfor %}
                             {% if not fh.totals_by_client_code.items and not fh.totals_by_marketing_bucket.items and not fh.totals_by_other_hours.items %}
                             <tr><td colspan="2" class="text-muted text-center">No hours found.</td></tr>
@@ -120,22 +172,28 @@
                         <tbody>
                             {% with sh=summary.time.second_half %}
                             {% for code, hours in sh.totals_by_client_code.items %}
+                            {% if hours and hours != 0 %}
                             <tr>
                                 <td><span class="badge bg-primary bg-opacity-10 text-primary me-1">Client</span>{{ code }}</td>
                                 <td class="text-end">{{ hours|floatformat:1 }}</td>
                             </tr>
+                            {% endif %}
                             {% endfor %}
                             {% for code, hours in sh.totals_by_marketing_bucket.items %}
+                            {% if hours and hours != 0 %}
                             <tr>
                                 <td><span class="badge bg-warning bg-opacity-10 text-warning me-1">Mktg</span>{{ code }}</td>
                                 <td class="text-end">{{ hours|floatformat:1 }}</td>
                             </tr>
+                            {% endif %}
                             {% endfor %}
                             {% for code, hours in sh.totals_by_other_hours.items %}
+                            {% if hours and hours != 0 %}
                             <tr>
                                 <td><span class="badge bg-secondary bg-opacity-10 text-secondary me-1">Other</span>{{ code }}</td>
                                 <td class="text-end">{{ hours|floatformat:1 }}</td>
                             </tr>
+                            {% endif %}
                             {% endfor %}
                             {% if not sh.totals_by_client_code.items and not sh.totals_by_marketing_bucket.items and not sh.totals_by_other_hours.items %}
                             <tr><td colspan="2" class="text-muted text-center">No hours found.</td></tr>
@@ -170,12 +228,12 @@
                         </thead>
                         <tbody>
                             {% for bucket, amount in summary.expenses.totals_by_bucket.items %}
+                            {% if amount and amount != 0 %}
                             <tr>
                                 <td>{{ bucket }}</td>
                                 <td class="text-end">${{ amount|floatformat:2 }}</td>
                             </tr>
-                            {% empty %}
-                            <tr><td colspan="2" class="text-muted text-center">No expense data.</td></tr>
+                            {% endif %}
                             {% endfor %}
                             {% if summary.expenses.client_billed_total and summary.expenses.client_billed_total != 0 %}
                             <tr>
@@ -233,40 +291,52 @@
 <div class="row g-4 mt-2">
     <div class="col-lg-6">
         <div class="card h-100">
-            <div class="card-header">Blocking Issues</div>
+            <div class="card-header d-flex align-items-center gap-2">
+                <i class="bi bi-exclamation-octagon" style="color: #f87171;"></i>
+                Blocking Issues
+                {% if errors %}
+                <span class="badge bg-danger ms-auto">{{ errors|length }}</span>
+                {% endif %}
+            </div>
             <div class="card-body">
                 {% if errors %}
-                <ul class="mb-0">
+                <ul class="issue-list">
                     {% for issue in errors %}
-                    <li>
+                    <li class="issue-error">
                         <strong>{{ issue.code }}</strong>: {{ issue.message }}
-                        {% if issue.location %}<span class="text-muted">({{ issue.location }})</span>{% endif %}
-                        {% if issue.hint %}<div class="text-muted small">{{ issue.hint }}</div>{% endif %}
+                        {% if issue.location %}<span class="issue-location ms-1">({{ issue.location }})</span>{% endif %}
+                        {% if issue.hint %}<div class="issue-hint">{{ issue.hint }}</div>{% endif %}
                     </li>
                     {% endfor %}
                 </ul>
                 {% else %}
-                <p class="text-muted mb-0">No blocking issues found.</p>
+                <p class="text-muted mb-0"><i class="bi bi-check-circle me-1"></i>No blocking issues found.</p>
                 {% endif %}
             </div>
         </div>
     </div>
     <div class="col-lg-6">
         <div class="card h-100">
-            <div class="card-header">Warnings</div>
+            <div class="card-header d-flex align-items-center gap-2">
+                <i class="bi bi-exclamation-triangle" style="color: #fbbf24;"></i>
+                Warnings
+                {% if warnings %}
+                <span class="badge bg-warning text-dark ms-auto">{{ warnings|length }}</span>
+                {% endif %}
+            </div>
             <div class="card-body">
                 {% if warnings %}
-                <ul class="mb-0">
+                <ul class="issue-list">
                     {% for issue in warnings %}
-                    <li>
+                    <li class="issue-warn">
                         <strong>{{ issue.code }}</strong>: {{ issue.message }}
-                        {% if issue.location %}<span class="text-muted">({{ issue.location }})</span>{% endif %}
-                        {% if issue.hint %}<div class="text-muted small">{{ issue.hint }}</div>{% endif %}
+                        {% if issue.location %}<span class="issue-location ms-1">({{ issue.location }})</span>{% endif %}
+                        {% if issue.hint %}<div class="issue-hint">{{ issue.hint }}</div>{% endif %}
                     </li>
                     {% endfor %}
                 </ul>
                 {% else %}
-                <p class="text-muted mb-0">No warnings.</p>
+                <p class="text-muted mb-0"><i class="bi bi-check-circle me-1"></i>No warnings.</p>
                 {% endif %}
             </div>
         </div>
