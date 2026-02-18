@@ -60,6 +60,7 @@ ROLE_GROUP_MAP = {
     "managing_partner": "managing_partner",
     "payroll_partner": "payroll_partner",
     "office_manager": "office_manager",
+    "partner": "partners",
 }
 
 

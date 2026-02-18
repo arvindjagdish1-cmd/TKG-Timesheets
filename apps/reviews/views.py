@@ -79,14 +79,14 @@ def office_manager_required(view_func):
 
 
 def managing_partner_required(view_func):
-    """Decorator to require managing_partner or payroll_partner role."""
+    """Decorator to require managing_partner, payroll_partner, or partners role."""
     def wrapped(request, *args, **kwargs):
         if not request.user.is_authenticated:
             return redirect("account_login")
         if not request.user.groups.filter(
-            name__in=["managing_partner", "payroll_partner"]
+            name__in=["managing_partner", "payroll_partner", "partners"]
         ).exists() and not request.user.is_superuser:
-            return HttpResponseForbidden("Access denied. Managing Partner role required.")
+            return HttpResponseForbidden("Access denied. Partner role required.")
         return view_func(request, *args, **kwargs)
     return wrapped
 

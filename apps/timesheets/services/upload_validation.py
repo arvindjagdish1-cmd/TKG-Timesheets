@@ -64,36 +64,6 @@ def _submission_windows_for_today(today=None):
     return valid
 
 
-def _active_half_for_period(year, month, today=None):
-    """
-    Return which half ('FIRST', 'SECOND', or 'BOTH') the user is currently
-    submitting for the given (year, month).  Used to decide whether to enforce
-    daily-minimum checks on the second half.
-    """
-    if today is None:
-        today = timezone.localdate()
-
-    last_day = _calendar.monthrange(year, month)[1]
-    first_half_due = _first_workday_on_or_after(_date(year, month, 15))
-    grace = _timedelta(days=getattr(settings, "UPLOAD_GRACE_CALENDAR_DAYS", 10))
-
-    submitting_first = _date(year, month, 1) <= today <= first_half_due + grace
-
-    if month == 12:
-        second_half_due = _first_workday_on_or_after(_date(year + 1, 1, 1))
-    else:
-        second_half_due = _first_workday_on_or_after(_date(year, month + 1, 1))
-    submitting_second = _date(year, month, 16) <= today <= second_half_due + grace
-
-    if submitting_first and submitting_second:
-        return "BOTH"
-    if submitting_first:
-        return "FIRST"
-    if submitting_second:
-        return "SECOND"
-    return "BOTH"
-
-
 def validate_parsed_workbook(parsed):
     issues = []
     sheets_present = set(parsed.get("sheets_present") or [])
@@ -157,14 +127,8 @@ def validate_parsed_workbook(parsed):
             hint="Confirm you used the latest template.",
         )
 
-    active_half = "BOTH"
-    if year and month:
-        active_half = _active_half_for_period(int(year), int(month))
-
-    if active_half in ("FIRST", "BOTH"):
-        _validate_time_half(parsed.get("time", {}).get("first_half"), issues, "Time-1st half of month")
-    if active_half in ("SECOND", "BOTH"):
-        _validate_time_half(parsed.get("time", {}).get("second_half"), issues, "Time-2nd half of month")
+    _validate_time_half(parsed.get("time", {}).get("first_half"), issues, "Time-1st half of month")
+    _validate_time_half(parsed.get("time", {}).get("second_half"), issues, "Time-2nd half of month")
 
     _validate_expenses(parsed, issues)
     _validate_cross_checks(parsed, issues)
@@ -175,6 +139,10 @@ def validate_parsed_workbook(parsed):
 def _validate_time_half(half_data, issues, sheet_name):
     if not half_data:
         return
+
+    total_hours = Decimal(str(half_data.get("total_hours", 0)))
+    half_has_hours = total_hours > 0
+
     min_weekday_hours = Decimal(str(getattr(settings, "MIN_WEEKDAY_HOURS", 8)))
     increment_minutes = getattr(settings, "TIME_INCREMENT_MINUTES", 15)
     increment = Decimal(str(increment_minutes)) / Decimal("60")
@@ -232,7 +200,7 @@ def _validate_time_half(half_data, issues, sheet_name):
         day = _parse_date_str(day_str)
         if not day:
             continue
-        if day.weekday() < 5 and hours < min_weekday_hours:
+        if half_has_hours and day.weekday() < 5 and hours < min_weekday_hours:
             _add_issue(
                 issues,
                 ERROR,
