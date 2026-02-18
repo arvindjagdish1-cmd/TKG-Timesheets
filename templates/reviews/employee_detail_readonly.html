@@ -9,6 +9,9 @@
         <p class="text-muted mb-0">Upload for {{ upload.year }}-{{ upload.month|stringformat:"02d" }}</p>
     </div>
     <div class="d-flex gap-2">
+        <a href="{% url 'reviews:dashboard' %}?month={{ upload.year }}-{{ upload.month|stringformat:'02d' }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+        </a>
         <a href="{% url 'timesheets:upload_download' upload.pk %}" class="btn btn-secondary">
             <i class="bi bi-download me-2"></i>Download Original
         </a>

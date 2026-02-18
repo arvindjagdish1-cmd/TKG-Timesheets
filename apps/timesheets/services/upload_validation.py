@@ -64,6 +64,38 @@ def _submission_windows_for_today(today=None):
     return valid
 
 
+def _open_halves_for_today(year, month, today=None):
+    """
+    Return a set of half-keys ("first_half", "second_half") whose submission
+    windows are currently open for the given (year, month).
+    """
+    if today is None:
+        today = timezone.localdate()
+
+    grace_calendar_days = getattr(settings, "UPLOAD_GRACE_CALENDAR_DAYS", 10)
+    halves = set()
+
+    first_half_open = _date(year, month, 15)
+    first_half_due = _first_workday_on_or_after(first_half_open)
+    first_half_close = first_half_due + _timedelta(days=grace_calendar_days)
+
+    if month == 12:
+        next_month_1st = _date(year + 1, 1, 1)
+    else:
+        next_month_1st = _date(year, month + 1, 1)
+
+    second_half_open = next_month_1st
+    second_half_due = _first_workday_on_or_after(second_half_open)
+    second_half_close = second_half_due + _timedelta(days=grace_calendar_days)
+
+    if first_half_open <= today <= first_half_close:
+        halves.add("first_half")
+    if second_half_open <= today <= second_half_close:
+        halves.add("second_half")
+
+    return halves
+
+
 def validate_parsed_workbook(parsed):
     issues = []
     sheets_present = set(parsed.get("sheets_present") or [])
@@ -127,8 +159,14 @@ def validate_parsed_workbook(parsed):
             hint="Confirm you used the latest template.",
         )
 
-    _validate_time_half(parsed.get("time", {}).get("first_half"), issues, "Time-1st half of month")
-    _validate_time_half(parsed.get("time", {}).get("second_half"), issues, "Time-2nd half of month")
+    open_halves = set()
+    if year and month:
+        open_halves = _open_halves_for_today(int(year), int(month))
+
+    _validate_time_half(parsed.get("time", {}).get("first_half"), issues,
+                        "Time-1st half of month", enforce_minimums="first_half" in open_halves)
+    _validate_time_half(parsed.get("time", {}).get("second_half"), issues,
+                        "Time-2nd half of month", enforce_minimums="second_half" in open_halves)
 
     _validate_expenses(parsed, issues)
     _validate_cross_checks(parsed, issues)
@@ -136,7 +174,7 @@ def validate_parsed_workbook(parsed):
     return issues
 
 
-def _validate_time_half(half_data, issues, sheet_name):
+def _validate_time_half(half_data, issues, sheet_name, enforce_minimums=True):
     if not half_data:
         return
 
@@ -147,6 +185,8 @@ def _validate_time_half(half_data, issues, sheet_name):
     increment_minutes = getattr(settings, "TIME_INCREMENT_MINUTES", 15)
     increment = Decimal(str(increment_minutes)) / Decimal("60")
 
+    minimum_severity = ERROR if enforce_minimums else WARN
+
     for line in half_data.get("lines", []):
         row_total = Decimal(str(line.get("row_total", 0)))
         charge_code = (line.get("charge_code") or "").strip()
@@ -156,7 +196,7 @@ def _validate_time_half(half_data, issues, sheet_name):
         if group == "client" and row_total > 0 and not charge_code:
             _add_issue(
                 issues,
-                ERROR,
+                minimum_severity,
                 "TIME_MISSING_CHARGE_CODE",
                 "Hours entered without a client charge code.",
                 location=f"{sheet_name}!U{line.get('row')}",
@@ -167,7 +207,7 @@ def _validate_time_half(half_data, issues, sheet_name):
             if not category or category.lower() == "select category":
                 _add_issue(
                     issues,
-                    ERROR,
+                    minimum_severity,
                     "TIME_MARKETING_CATEGORY_NOT_SELECTED",
                     "Marketing row has hours but no category selected.",
                     location=f"{sheet_name}!A{line.get('row')}",
@@ -203,7 +243,7 @@ def _validate_time_half(half_data, issues, sheet_name):
         if half_has_hours and day.weekday() < 5 and hours < min_weekday_hours:
             _add_issue(
                 issues,
-                ERROR,
+                minimum_severity,
                 "TIME_DAILY_MINIMUM_NOT_MET",
                 f"Weekday total is below minimum: {hours} hours.",
                 location=f"{sheet_name}!{day.isoformat()}",
