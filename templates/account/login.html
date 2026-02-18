@@ -1,46 +1,21 @@
 {% extends "base.html" %}
 {% load static socialaccount %}
 
-{% block title %}Welcome - Keystone Timesheet & Expenses{% endblock %}
+{% block title %}Welcome - Keystone Timesheet Portal{% endblock %}
 
 {% block content %}
-<div class="keystone-login-page">
+<div class="keystone-login-page" id="loginPage">
+    <canvas id="temporalCanvas"></canvas>
+
     <div class="login-container">
-        <!-- Animated Logo -->
         <div class="logo-container">
-            <img src="{% static 'images/keystone-logo.png' %}" alt="Keystone" class="keystone-logo" onerror="this.style.display='none'; document.getElementById('logo-fallback').style.display='block';">
-            <div id="logo-fallback" class="logo-fallback" style="display:none;">
-                <!-- SVG Fallback - Keystone arch design -->
-                <svg width="140" height="120" viewBox="0 0 140 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <defs>
-                        <linearGradient id="archGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" style="stop-color:#4a90d9;stop-opacity:1" />
-                            <stop offset="100%" style="stop-color:#1e3a5f;stop-opacity:1" />
-                        </linearGradient>
-                    </defs>
-                    <!-- Main arch structure -->
-                    <path d="M20 110 L20 50 Q20 20, 70 20 Q120 20, 120 50 L120 110" stroke="url(#archGradient)" stroke-width="8" fill="none" stroke-linecap="round"/>
-                    <!-- Left pillar details -->
-                    <path d="M25 110 L25 55" stroke="url(#archGradient)" stroke-width="3" fill="none" opacity="0.7"/>
-                    <path d="M30 110 L30 48" stroke="url(#archGradient)" stroke-width="2" fill="none" opacity="0.5"/>
-                    <!-- Right pillar details -->
-                    <path d="M115 110 L115 55" stroke="url(#archGradient)" stroke-width="3" fill="none" opacity="0.7"/>
-                    <path d="M110 110 L110 48" stroke="url(#archGradient)" stroke-width="2" fill="none" opacity="0.5"/>
-                    <!-- Keystone at top -->
-                    <path d="M60 25 L70 15 L80 25 L75 35 L65 35 Z" fill="url(#archGradient)" opacity="0.9"/>
-                    <!-- Inner arch lines -->
-                    <path d="M35 100 L35 55 Q35 35, 70 35 Q105 35, 105 55 L105 100" stroke="url(#archGradient)" stroke-width="2" fill="none" opacity="0.4"/>
-                </svg>
-            </div>
+            <img src="{% static 'images/keystone-logo.png' %}" alt="Keystone" class="keystone-logo" onerror="this.style.display='none';">
         </div>
 
-        <!-- Welcome Text -->
         <div class="welcome-text">
-            <h1>Keystone Timesheet and Expenses Portal</h1>
-            <p class="subtitle">Streamline your time tracking and expense management</p>
+            <h1>Keystone Timesheet Portal</h1>
         </div>
 
-        <!-- Login Options -->
         <div class="login-options">
             {% if messages %}
             {% for message in messages %}
@@ -50,7 +25,6 @@
             {% endfor %}
             {% endif %}
 
-            <!-- Sign In Button -->
             <a href="{% provider_login_url 'microsoft' %}" class="btn-login btn-signin">
                 <svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 21 21">
                     <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
@@ -66,7 +40,6 @@
             </p>
         </div>
 
-        <!-- Footer -->
         <div class="login-footer">
             <p>&copy; {% now "Y" %} The Keystone Group. All rights reserved.</p>
         </div>
@@ -74,215 +47,298 @@
 </div>
 
 <style>
-    /* Reset and base */
     .keystone-login-page {
         min-height: 100vh;
-        background: #0a0a0a;
         display: flex;
         align-items: center;
         justify-content: center;
         padding: 2rem;
         overflow: hidden;
+        position: relative;
+        background: #07080a;
+    }
+
+    #temporalCanvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 0;
     }
 
     .login-container {
-        max-width: 480px;
+        max-width: 440px;
         width: 100%;
         text-align: center;
+        position: relative;
+        z-index: 1;
+        background: rgba(15, 17, 22, 0.65);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 1.25rem;
+        padding: 3rem 2.5rem;
+        backdrop-filter: blur(40px) saturate(1.4);
+        -webkit-backdrop-filter: blur(40px) saturate(1.4);
+        box-shadow:
+            0 0 0 1px rgba(255, 255, 255, 0.04),
+            0 20px 60px rgba(0, 0, 0, 0.5),
+            0 0 120px rgba(74, 144, 217, 0.06);
     }
 
-    /* Logo Animation */
     .logo-container {
-        margin-bottom: 2.5rem;
-        animation: logoDescend 1s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        margin-bottom: 2rem;
+        animation: logoReveal 1.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
         opacity: 0;
     }
 
     .keystone-logo {
-        width: 140px;
+        width: 120px;
         height: auto;
-        filter: drop-shadow(0 0 30px rgba(100, 149, 237, 0.4));
+        filter: drop-shadow(0 0 24px rgba(100, 149, 237, 0.3));
+        transition: filter 0.4s ease, transform 0.4s ease;
     }
 
-    @keyframes logoDescend {
-        0% {
-            opacity: 0;
-            transform: translateY(-100px) scale(0.8);
-        }
-        60% {
-            opacity: 1;
-            transform: translateY(10px) scale(1.02);
-        }
-        100% {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-        }
+    .logo-container:hover .keystone-logo {
+        filter: drop-shadow(0 0 36px rgba(100, 149, 237, 0.5));
+        transform: scale(1.05);
     }
 
-    /* Welcome Text Animation */
+    @keyframes logoReveal {
+        0% { opacity: 0; transform: translateY(-30px) scale(0.9); }
+        100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
     .welcome-text {
-        margin-bottom: 3rem;
-        animation: fadeInUp 0.8s ease-out 0.4s forwards;
+        margin-bottom: 2.5rem;
+        animation: contentFade 0.8s ease-out 0.3s forwards;
         opacity: 0;
     }
 
     .welcome-text h1 {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-        font-size: 1.75rem;
+        font-size: 1.5rem;
         font-weight: 600;
-        color: #ffffff;
-        margin-bottom: 0.75rem;
+        color: #f0f2f5;
+        margin: 0;
         letter-spacing: -0.02em;
     }
 
-    .welcome-text .subtitle {
-        font-size: 1rem;
-        color: #6b7280;
-        margin: 0;
+    @keyframes contentFade {
+        0% { opacity: 0; transform: translateY(12px); }
+        100% { opacity: 1; transform: translateY(0); }
     }
 
-    @keyframes fadeInUp {
-        0% {
-            opacity: 0;
-            transform: translateY(20px);
-        }
-        100% {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-
-    /* Login Options Animation */
     .login-options {
-        animation: fadeInUp 0.8s ease-out 0.7s forwards;
+        animation: contentFade 0.8s ease-out 0.55s forwards;
         opacity: 0;
     }
 
-    /* Alert Messages */
     .alert-message {
-        background: rgba(239, 68, 68, 0.1);
-        border: 1px solid rgba(239, 68, 68, 0.3);
+        background: rgba(239, 68, 68, 0.08);
+        border: 1px solid rgba(239, 68, 68, 0.2);
         color: #f87171;
-        padding: 0.875rem 1rem;
-        border-radius: 0.75rem;
-        margin-bottom: 1.5rem;
+        padding: 0.75rem 1rem;
+        border-radius: 0.625rem;
+        margin-bottom: 1.25rem;
         font-size: 0.875rem;
     }
 
     .alert-message.alert-success {
-        background: rgba(34, 197, 94, 0.1);
-        border-color: rgba(34, 197, 94, 0.3);
+        background: rgba(34, 197, 94, 0.08);
+        border-color: rgba(34, 197, 94, 0.2);
         color: #4ade80;
     }
 
-    /* Login Buttons */
     .btn-login {
         display: flex;
         align-items: center;
         justify-content: center;
         gap: 0.75rem;
         width: 100%;
-        padding: 1rem 1.5rem;
-        border-radius: 0.75rem;
-        font-size: 1rem;
+        padding: 0.875rem 1.5rem;
+        border-radius: 0.625rem;
+        font-size: 0.9375rem;
         font-weight: 500;
         text-decoration: none;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         cursor: pointer;
         border: none;
     }
 
     .btn-signin {
         background: #ffffff;
-        color: #1a1a1a;
-        box-shadow: 0 4px 14px rgba(255, 255, 255, 0.1);
+        color: #111;
+        box-shadow: 0 2px 10px rgba(255, 255, 255, 0.08);
     }
 
     .btn-signin:hover {
-        background: #f3f4f6;
-        transform: translateY(-2px);
-        box-shadow: 0 8px 25px rgba(255, 255, 255, 0.15);
-        color: #1a1a1a;
+        background: #f5f5f5;
+        transform: translateY(-1px);
+        box-shadow: 0 6px 20px rgba(255, 255, 255, 0.12);
+        color: #111;
         text-decoration: none;
     }
 
-    .btn-signup {
-        background: transparent;
-        color: #9ca3af;
-        border: 1px solid #374151;
+    .btn-signin:active {
+        transform: translateY(0);
     }
 
-    .btn-signup:hover {
-        background: #1f2937;
-        color: #ffffff;
-        border-color: #4b5563;
-        transform: translateY(-2px);
-        text-decoration: none;
-    }
-
-    /* Help Text */
     .help-text {
-        margin-top: 2rem;
+        margin-top: 1.5rem;
         font-size: 0.8125rem;
-        color: #6b7280;
-        line-height: 1.6;
+        color: rgba(255, 255, 255, 0.35);
+        line-height: 1.5;
     }
 
-    /* Footer */
     .login-footer {
-        margin-top: 3rem;
-        animation: fadeInUp 0.8s ease-out 1s forwards;
+        margin-top: 2.5rem;
+        animation: contentFade 0.8s ease-out 0.8s forwards;
         opacity: 0;
     }
 
     .login-footer p {
-        font-size: 0.8125rem;
-        color: #6b7280;
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.2);
         margin: 0;
-        letter-spacing: 0.01em;
+        letter-spacing: 0.02em;
     }
 
-    /* Responsive */
     @media (max-width: 480px) {
-        .keystone-login-page {
-            padding: 1.5rem;
-        }
-
-        .welcome-text h1 {
-            font-size: 1.5rem;
-        }
-
-        .keystone-logo {
-            width: 100px;
-        }
-    }
-
-    /* Glow effect on logo hover */
-    .logo-container:hover .keystone-logo {
-        filter: drop-shadow(0 0 40px rgba(100, 149, 237, 0.6));
-        transform: scale(1.05);
-        transition: all 0.3s ease;
-    }
-
-    .keystone-logo {
-        transition: all 0.3s ease;
-    }
-
-    /* Fallback logo styling */
-    .logo-fallback {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-    }
-
-    .logo-fallback svg {
-        filter: drop-shadow(0 0 30px rgba(100, 149, 237, 0.4));
-        transition: all 0.3s ease;
-    }
-
-    .logo-container:hover .logo-fallback svg {
-        filter: drop-shadow(0 0 40px rgba(100, 149, 237, 0.6));
-        transform: scale(1.05);
+        .keystone-login-page { padding: 1.25rem; }
+        .login-container { padding: 2rem 1.5rem; }
+        .welcome-text h1 { font-size: 1.25rem; }
+        .keystone-logo { width: 90px; }
     }
 </style>
+
+<script>
+(function () {
+    const canvas = document.getElementById('temporalCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let w, h, particles, arcs, mouse;
+
+    function getTimeColors() {
+        const hour = new Date().getHours();
+        if (hour >= 6 && hour < 12) {
+            return { bg: [7, 8, 14], accent: [74, 144, 217], glow: [100, 170, 240] };
+        } else if (hour >= 12 && hour < 17) {
+            return { bg: [10, 10, 16], accent: [60, 130, 200], glow: [80, 160, 230] };
+        } else if (hour >= 17 && hour < 21) {
+            return { bg: [8, 6, 14], accent: [120, 80, 180], glow: [160, 100, 220] };
+        } else {
+            return { bg: [5, 5, 12], accent: [40, 80, 160], glow: [60, 100, 180] };
+        }
+    }
+
+    const colors = getTimeColors();
+    mouse = { x: -1000, y: -1000 };
+
+    function resize() {
+        w = canvas.width = window.innerWidth;
+        h = canvas.height = window.innerHeight;
+    }
+
+    function initParticles() {
+        particles = [];
+        const count = Math.floor((w * h) / 18000);
+        for (let i = 0; i < count; i++) {
+            particles.push({
+                x: Math.random() * w,
+                y: Math.random() * h,
+                vx: (Math.random() - 0.5) * 0.3,
+                vy: (Math.random() - 0.5) * 0.3,
+                r: Math.random() * 1.5 + 0.5,
+                a: Math.random() * 0.4 + 0.1,
+            });
+        }
+    }
+
+    function initArcs() {
+        arcs = [];
+        for (let i = 0; i < 3; i++) {
+            arcs.push({
+                cx: w * (0.25 + Math.random() * 0.5),
+                cy: h * (0.25 + Math.random() * 0.5),
+                radius: 80 + Math.random() * 160,
+                startAngle: Math.random() * Math.PI * 2,
+                speed: (Math.random() - 0.5) * 0.004,
+                length: Math.PI * (0.3 + Math.random() * 0.5),
+                alpha: 0.04 + Math.random() * 0.06,
+            });
+        }
+    }
+
+    function draw(t) {
+        ctx.fillStyle = `rgb(${colors.bg[0]}, ${colors.bg[1]}, ${colors.bg[2]})`;
+        ctx.fillRect(0, 0, w, h);
+
+        const grad = ctx.createRadialGradient(w * 0.5, h * 0.4, 0, w * 0.5, h * 0.4, Math.max(w, h) * 0.7);
+        grad.addColorStop(0, `rgba(${colors.accent[0]}, ${colors.accent[1]}, ${colors.accent[2]}, 0.06)`);
+        grad.addColorStop(0.5, `rgba(${colors.accent[0]}, ${colors.accent[1]}, ${colors.accent[2]}, 0.02)`);
+        grad.addColorStop(1, 'transparent');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, w, h);
+
+        for (const arc of arcs) {
+            arc.startAngle += arc.speed;
+            ctx.beginPath();
+            ctx.arc(arc.cx, arc.cy, arc.radius, arc.startAngle, arc.startAngle + arc.length);
+            ctx.strokeStyle = `rgba(${colors.glow[0]}, ${colors.glow[1]}, ${colors.glow[2]}, ${arc.alpha})`;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+
+        const connectionDist = 120;
+        for (let i = 0; i < particles.length; i++) {
+            const p = particles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            if (p.x < 0) p.x = w;
+            if (p.x > w) p.x = 0;
+            if (p.y < 0) p.y = h;
+            if (p.y > h) p.y = 0;
+
+            const dx = mouse.x - p.x;
+            const dy = mouse.y - p.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            let alpha = p.a;
+            if (dist < 200) {
+                alpha = p.a + (1 - p.a) * (1 - dist / 200) * 0.5;
+            }
+
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(${colors.glow[0]}, ${colors.glow[1]}, ${colors.glow[2]}, ${alpha})`;
+            ctx.fill();
+
+            for (let j = i + 1; j < particles.length; j++) {
+                const q = particles[j];
+                const ddx = p.x - q.x;
+                const ddy = p.y - q.y;
+                const d = Math.sqrt(ddx * ddx + ddy * ddy);
+                if (d < connectionDist) {
+                    ctx.beginPath();
+                    ctx.moveTo(p.x, p.y);
+                    ctx.lineTo(q.x, q.y);
+                    ctx.strokeStyle = `rgba(${colors.glow[0]}, ${colors.glow[1]}, ${colors.glow[2]}, ${0.06 * (1 - d / connectionDist)})`;
+                    ctx.lineWidth = 0.5;
+                    ctx.stroke();
+                }
+            }
+        }
+
+        requestAnimationFrame(draw);
+    }
+
+    window.addEventListener('resize', function () { resize(); initParticles(); initArcs(); });
+    document.addEventListener('mousemove', function (e) { mouse.x = e.clientX; mouse.y = e.clientY; });
+    document.addEventListener('mouseleave', function () { mouse.x = -1000; mouse.y = -1000; });
+
+    resize();
+    initParticles();
+    initArcs();
+    requestAnimationFrame(draw);
+})();
+</script>
 {% endblock %}
