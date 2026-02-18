@@ -37,32 +37,48 @@ EXPENSE_BUCKET_COLUMNS = [
 
 
 def parse_timesheet_workbook(file_bytes):
-    wb = load_workbook(
+    wb_data = load_workbook(
+        filename=BytesIO(file_bytes),
+        read_only=True,
+        data_only=True,
+    )
+    wb_formulas = load_workbook(
         filename=BytesIO(file_bytes),
         read_only=True,
         data_only=False,
     )
 
-    sheets_present = wb.sheetnames
-    worksheets = {name: wb[name] for name in wb.sheetnames}
+    sheets_present = wb_data.sheetnames
+    ws_data = {name: wb_data[name] for name in wb_data.sheetnames}
+    ws_formulas = {name: wb_formulas[name] for name in wb_formulas.sheetnames}
 
-    time_first = worksheets.get("Time-1st half of month")
-    time_second = worksheets.get("Time-2nd half of month")
-    validations_ws = worksheets.get("Validations")
+    time_first_data = ws_data.get("Time-1st half of month")
+    time_first_formulas = ws_formulas.get("Time-1st half of month")
+    time_second_data = ws_data.get("Time-2nd half of month")
+    time_second_formulas = ws_formulas.get("Time-2nd half of month")
+    validations_ws = ws_data.get("Validations")
 
-    metadata = _parse_metadata(time_first)
+    metadata = _parse_metadata(time_first_data)
     year = metadata.get("year")
     month = metadata.get("month")
 
     validations_map = _parse_validations_map(validations_ws)
 
     time_data = {
-        "first_half": _parse_time_half(time_first, "FIRST", year, month, validations_map),
-        "second_half": _parse_time_half(time_second, "SECOND", year, month, validations_map),
+        "first_half": _parse_time_half(
+            time_first_data, "FIRST", year, month, validations_map,
+            ws_formulas=time_first_formulas,
+            all_ws_data=ws_data,
+        ),
+        "second_half": _parse_time_half(
+            time_second_data, "SECOND", year, month, validations_map,
+            ws_formulas=time_second_formulas,
+            all_ws_data=ws_data,
+        ),
     }
 
-    expenses_data = _parse_expenses(worksheets)
-    mileage_data = _parse_mileage(worksheets.get("Auto Log 655"))
+    expenses_data = _parse_expenses(ws_data)
+    mileage_data = _parse_mileage(ws_data.get("Auto Log 655"))
 
     return {
         "sheets_present": sheets_present,
@@ -99,7 +115,8 @@ def _parse_validations_map(ws):
     return mapping
 
 
-def _parse_time_half(ws, half, year, month, validations_map):
+def _parse_time_half(ws, half, year, month, validations_map,
+                     ws_formulas=None, all_ws_data=None):
     if not ws or not year or not month:
         return _empty_time_half()
 
@@ -121,6 +138,8 @@ def _parse_time_half(ws, half, year, month, validations_map):
             group="client",
             label_cell="A",
             code_cell="U",
+            ws_formulas=ws_formulas,
+            all_ws_data=all_ws_data,
         )
         lines.append(line)
         _accumulate_time_totals(
@@ -132,7 +151,7 @@ def _parse_time_half(ws, half, year, month, validations_map):
 
     # Marketing rows
     for row_idx in range(16, 30):
-        category = _string_cell(ws, f"A{row_idx}")
+        category = _resolve_cell(ws, ws_formulas, all_ws_data, f"A{row_idx}", as_string=True)
         base_code = validations_map.get(category) if category else ""
         line = _parse_time_row(
             ws,
@@ -142,6 +161,8 @@ def _parse_time_half(ws, half, year, month, validations_map):
             label=category,
             charge_code=base_code,
             category=category,
+            ws_formulas=ws_formulas,
+            all_ws_data=all_ws_data,
         )
         lines.append(line)
         _accumulate_time_totals(
@@ -160,6 +181,8 @@ def _parse_time_half(ws, half, year, month, validations_map):
             group="internal",
             label_cell="A",
             code_cell="U",
+            ws_formulas=ws_formulas,
+            all_ws_data=all_ws_data,
         )
         lines.append(line)
         _accumulate_time_totals(
@@ -192,11 +215,15 @@ def _parse_time_row(
     label=None,
     charge_code=None,
     category=None,
+    ws_formulas=None,
+    all_ws_data=None,
 ):
     if label_cell:
-        label = _string_cell(ws, f"{label_cell}{row_idx}")
+        label = _resolve_cell(ws, ws_formulas, all_ws_data,
+                              f"{label_cell}{row_idx}", as_string=True)
     if code_cell:
-        charge_code = _string_cell(ws, f"{code_cell}{row_idx}")
+        charge_code = _resolve_cell(ws, ws_formulas, all_ws_data,
+                                    f"{code_cell}{row_idx}", as_string=True)
 
     hours_by_day = {}
     row_total = Decimal("0")
@@ -381,12 +408,58 @@ def _row_is_active(date_val, description, row_amount_total, charge_code):
     return bool(date_val or description or row_amount_total > 0 or charge_code)
 
 
+import re as _re
+
+_CROSS_SHEET_RE = _re.compile(
+    r"^='?([^'!]+)'?!([A-Z]+)(\d+)$"
+)
+
+
+def _resolve_cell(ws_data, ws_formulas, all_ws_data, cell_ref, as_string=False):
+    """
+    Return the resolved value of a cell.
+
+    With data_only=True, openpyxl returns the cached computed value.
+    If that is None/empty and the formula worksheet shows a cross-sheet
+    reference like ='Time-1st half of month'!U6, we follow the reference
+    and read the value from the source sheet (also opened data_only).
+    """
+    data_val = ws_data[cell_ref].value if ws_data else None
+
+    if data_val is not None and str(data_val).strip() != "":
+        return _to_string(data_val) if as_string else data_val
+
+    if ws_formulas is not None:
+        formula_val = ws_formulas[cell_ref].value
+        if isinstance(formula_val, str) and formula_val.startswith("="):
+            m = _CROSS_SHEET_RE.match(formula_val)
+            if m and all_ws_data:
+                ref_sheet, ref_col, ref_row = m.group(1), m.group(2), m.group(3)
+                source_ws = all_ws_data.get(ref_sheet)
+                if source_ws:
+                    resolved = source_ws[f"{ref_col}{ref_row}"].value
+                    if resolved is not None:
+                        return _to_string(resolved) if as_string else resolved
+
+            if as_string:
+                return ""
+
+    return _to_string(data_val) if as_string else data_val
+
+
 def _decimal_cell(ws, cell_ref):
-    return _decimal_value(ws[cell_ref].value) or Decimal("0")
+    val = ws[cell_ref].value
+    if isinstance(val, str) and (val.startswith("=") or val.startswith("'")):
+        return Decimal("0")
+    return _decimal_value(val) or Decimal("0")
 
 
 def _string_cell(ws, cell_ref):
-    return _to_string(ws[cell_ref].value)
+    val = ws[cell_ref].value
+    s = _to_string(val)
+    if s.startswith("=") or s.startswith("'"):
+        return ""
+    return s
 
 
 def _int_cell(ws, cell_ref):

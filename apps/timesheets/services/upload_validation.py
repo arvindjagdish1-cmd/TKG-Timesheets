@@ -1,12 +1,97 @@
+import calendar as _calendar
+from datetime import date as _date, timedelta as _timedelta
 from decimal import Decimal
 
 from django.conf import settings
+from django.utils import timezone
 
 from .upload_parser import REQUIRED_SHEETS
 
 
 ERROR = "ERROR"
 WARN = "WARN"
+
+
+def _first_workday_on_or_after(d):
+    """Return *d* itself if it's Mon-Fri, otherwise the following Monday."""
+    while d.weekday() >= 5:
+        d += _timedelta(days=1)
+    return d
+
+
+def _submission_windows_for_today(today=None):
+    """
+    Return the set of (year, month) values that are valid upload targets
+    right now.
+
+    Bimonthly cadence:
+      * 1st-half (days 1-15) is due on the first business day >= the 15th.
+      * 2nd-half (days 16-end) is due on the first business day >= the 1st
+        of the *next* month.
+
+    We allow uploading from the start of the period through 5 business days
+    after the due date (grace window).
+    """
+    if today is None:
+        today = timezone.localdate()
+
+    valid = set()
+    grace_calendar_days = getattr(settings, "UPLOAD_GRACE_CALENDAR_DAYS", 10)
+
+    for delta_months in (-1, 0, 1):
+        probe_year = today.year + (today.month - 1 + delta_months) // 12
+        probe_month = (today.month - 1 + delta_months) % 12 + 1
+
+        last_day = _calendar.monthrange(probe_year, probe_month)[1]
+
+        first_half_due = _first_workday_on_or_after(_date(probe_year, probe_month, 15))
+        if probe_month == 12:
+            second_half_due = _first_workday_on_or_after(_date(probe_year + 1, 1, 1))
+        else:
+            second_half_due = _first_workday_on_or_after(_date(probe_year, probe_month + 1, 1))
+
+        first_half_open = _date(probe_year, probe_month, 1)
+        first_half_close = first_half_due + _timedelta(days=grace_calendar_days)
+
+        second_half_open = _date(probe_year, probe_month, 16)
+        second_half_close = second_half_due + _timedelta(days=grace_calendar_days)
+
+        if first_half_open <= today <= first_half_close:
+            valid.add((probe_year, probe_month))
+        if second_half_open <= today <= second_half_close:
+            valid.add((probe_year, probe_month))
+
+    return valid
+
+
+def _active_half_for_period(year, month, today=None):
+    """
+    Return which half ('FIRST', 'SECOND', or 'BOTH') the user is currently
+    submitting for the given (year, month).  Used to decide whether to enforce
+    daily-minimum checks on the second half.
+    """
+    if today is None:
+        today = timezone.localdate()
+
+    last_day = _calendar.monthrange(year, month)[1]
+    first_half_due = _first_workday_on_or_after(_date(year, month, 15))
+    grace = _timedelta(days=getattr(settings, "UPLOAD_GRACE_CALENDAR_DAYS", 10))
+
+    submitting_first = _date(year, month, 1) <= today <= first_half_due + grace
+
+    if month == 12:
+        second_half_due = _first_workday_on_or_after(_date(year + 1, 1, 1))
+    else:
+        second_half_due = _first_workday_on_or_after(_date(year, month + 1, 1))
+    submitting_second = _date(year, month, 16) <= today <= second_half_due + grace
+
+    if submitting_first and submitting_second:
+        return "BOTH"
+    if submitting_first:
+        return "FIRST"
+    if submitting_second:
+        return "SECOND"
+    return "BOTH"
 
 
 def validate_parsed_workbook(parsed):
@@ -46,6 +131,20 @@ def validate_parsed_workbook(parsed):
             location="Time-1st half of month!T1/V1",
             hint="Ensure the month/year are correct in the template.",
         )
+    else:
+        valid_windows = _submission_windows_for_today()
+        if (int(year), int(month)) not in valid_windows:
+            from calendar import month_name
+            _add_issue(
+                issues,
+                ERROR,
+                "PERIOD_OUTSIDE_SUBMISSION_WINDOW",
+                f"This workbook is for {month_name[int(month)]} {year}, which is outside "
+                f"the current submission window.",
+                location="Time-1st half of month!T1/V1",
+                hint="Upload the timesheet for the current period, or contact "
+                     "your office manager if you need a late submission.",
+            )
 
     template_version = metadata.get("template_version", "")
     if template_version and "Version" not in template_version:
@@ -58,8 +157,15 @@ def validate_parsed_workbook(parsed):
             hint="Confirm you used the latest template.",
         )
 
-    _validate_time_half(parsed.get("time", {}).get("first_half"), issues, "Time-1st half of month")
-    _validate_time_half(parsed.get("time", {}).get("second_half"), issues, "Time-2nd half of month")
+    active_half = "BOTH"
+    if year and month:
+        active_half = _active_half_for_period(int(year), int(month))
+
+    if active_half in ("FIRST", "BOTH"):
+        _validate_time_half(parsed.get("time", {}).get("first_half"), issues, "Time-1st half of month")
+    if active_half in ("SECOND", "BOTH"):
+        _validate_time_half(parsed.get("time", {}).get("second_half"), issues, "Time-2nd half of month")
+
     _validate_expenses(parsed, issues)
     _validate_cross_checks(parsed, issues)
 
@@ -299,7 +405,7 @@ def _sum_codes(totals_by_code, codes):
 
 def _parse_date_str(value):
     try:
-        return None if not value else __import__("datetime").date.fromisoformat(value)
+        return None if not value else _date.fromisoformat(value)
     except ValueError:
         return None
 

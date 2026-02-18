@@ -38,7 +38,8 @@ def office_manager_required(view_func):
 
 
 def _period_key(period):
-    return period.year * 1000 + period.month * 10 + period.half
+    half_num = 1 if period.half == "FIRST" else 2
+    return period.year * 1000 + period.month * 10 + half_num
 
 
 def _month_key(month):
@@ -119,16 +120,14 @@ def generate_timesheet_exports(request):
 
     export_type = request.POST.get("export_type", "xlsx")  # xlsx, pdf, pack, all
 
-    # Get all approved timesheets for this period
     timesheets = Timesheet.objects.filter(
         period__in=periods,
         status=Timesheet.Status.APPROVED
-    ).select_related("employee", "employee__profile").order_by(
-        "employee__profile__seniority_order", "employee__last_name"
-    )
+    ).select_related("employee").order_by("employee__last_name", "employee__first_name")
 
     if not timesheets.exists():
-        messages.warning(request, "No approved timesheets found for this period.")
+        messages.warning(request, "No approved timesheets found for the selected period. "
+                         "Timesheets must be submitted and approved before they can be exported.")
         return redirect("exports:dashboard")
 
     generated_files = []
@@ -209,19 +208,16 @@ def generate_expense_exports(request):
     export_type = request.POST.get("export_type", "xlsx")
     sort_by = request.POST.get("sort_by", "seniority")  # seniority or alpha
 
-    # Get all approved expense reports
     reports = ExpenseReport.objects.filter(
         month__in=months,
         status=ExpenseReport.Status.APPROVED
-    ).select_related("employee", "employee__profile")
+    ).select_related("employee")
 
-    if sort_by == "alpha":
-        reports = reports.order_by("employee__last_name", "employee__first_name")
-    else:
-        reports = reports.order_by("employee__profile__seniority_order", "employee__last_name")
+    reports = reports.order_by("employee__last_name", "employee__first_name")
 
     if not reports.exists():
-        messages.warning(request, "No approved expense reports found for this month.")
+        messages.warning(request, "No approved expense reports found for the selected month. "
+                         "Expense reports must be submitted and approved before they can be exported.")
         return redirect("exports:dashboard")
 
     generated_files = []

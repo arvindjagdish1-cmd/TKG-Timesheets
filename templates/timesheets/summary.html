@@ -59,7 +59,7 @@
 <div class="row g-4">
     <div class="col-lg-6">
         <div class="card h-100">
-            <div class="card-header">Hours by Charge Code (First Half)</div>
+            <div class="card-header">Hours by Category (First Half)</div>
             <div class="card-body">
                 <div class="table-responsive">
                     <table class="table">
@@ -70,15 +70,36 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for code, hours in summary.time.first_half.totals_by_client_code.items %}
+                            {% with fh=summary.time.first_half %}
+                            {% for code, hours in fh.totals_by_client_code.items %}
                             <tr>
-                                <td>{{ code }}</td>
+                                <td><span class="badge bg-primary bg-opacity-10 text-primary me-1">Client</span>{{ code }}</td>
                                 <td class="text-end">{{ hours|floatformat:1 }}</td>
                             </tr>
-                            {% empty %}
-                            <tr><td colspan="2" class="text-muted text-center">No client hours found.</td></tr>
                             {% endfor %}
+                            {% for code, hours in fh.totals_by_marketing_bucket.items %}
+                            <tr>
+                                <td><span class="badge bg-warning bg-opacity-10 text-warning me-1">Mktg</span>{{ code }}</td>
+                                <td class="text-end">{{ hours|floatformat:1 }}</td>
+                            </tr>
+                            {% endfor %}
+                            {% for code, hours in fh.totals_by_other_hours.items %}
+                            <tr>
+                                <td><span class="badge bg-secondary bg-opacity-10 text-secondary me-1">Other</span>{{ code }}</td>
+                                <td class="text-end">{{ hours|floatformat:1 }}</td>
+                            </tr>
+                            {% endfor %}
+                            {% if not fh.totals_by_client_code.items and not fh.totals_by_marketing_bucket.items and not fh.totals_by_other_hours.items %}
+                            <tr><td colspan="2" class="text-muted text-center">No hours found.</td></tr>
+                            {% endif %}
+                            {% endwith %}
                         </tbody>
+                        <tfoot class="table-light">
+                            <tr>
+                                <th>Total</th>
+                                <th class="text-end">{{ summary.time.first_half.total_hours|default:0|floatformat:1 }}</th>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
             </div>
@@ -86,7 +107,7 @@
     </div>
     <div class="col-lg-6">
         <div class="card h-100">
-            <div class="card-header">Hours by Charge Code (Second Half)</div>
+            <div class="card-header">Hours by Category (Second Half)</div>
             <div class="card-body">
                 <div class="table-responsive">
                     <table class="table">
@@ -97,15 +118,36 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for code, hours in summary.time.second_half.totals_by_client_code.items %}
+                            {% with sh=summary.time.second_half %}
+                            {% for code, hours in sh.totals_by_client_code.items %}
                             <tr>
-                                <td>{{ code }}</td>
+                                <td><span class="badge bg-primary bg-opacity-10 text-primary me-1">Client</span>{{ code }}</td>
                                 <td class="text-end">{{ hours|floatformat:1 }}</td>
                             </tr>
-                            {% empty %}
-                            <tr><td colspan="2" class="text-muted text-center">No client hours found.</td></tr>
                             {% endfor %}
+                            {% for code, hours in sh.totals_by_marketing_bucket.items %}
+                            <tr>
+                                <td><span class="badge bg-warning bg-opacity-10 text-warning me-1">Mktg</span>{{ code }}</td>
+                                <td class="text-end">{{ hours|floatformat:1 }}</td>
+                            </tr>
+                            {% endfor %}
+                            {% for code, hours in sh.totals_by_other_hours.items %}
+                            <tr>
+                                <td><span class="badge bg-secondary bg-opacity-10 text-secondary me-1">Other</span>{{ code }}</td>
+                                <td class="text-end">{{ hours|floatformat:1 }}</td>
+                            </tr>
+                            {% endfor %}
+                            {% if not sh.totals_by_client_code.items and not sh.totals_by_marketing_bucket.items and not sh.totals_by_other_hours.items %}
+                            <tr><td colspan="2" class="text-muted text-center">No hours found.</td></tr>
+                            {% endif %}
+                            {% endwith %}
                         </tbody>
+                        <tfoot class="table-light">
+                            <tr>
+                                <th>Total</th>
+                                <th class="text-end">{{ summary.time.second_half.total_hours|default:0|floatformat:1 }}</th>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
             </div>
