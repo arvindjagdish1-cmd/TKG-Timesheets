@@ -24,13 +24,14 @@ def _submission_windows_for_today(today=None):
     Return the set of (year, month) values that are valid upload targets
     right now.
 
-    Bimonthly cadence:
-      * 1st-half (days 1-15) is due on the first business day >= the 15th.
-      * 2nd-half (days 16-end) is due on the first business day >= the 1st
-        of the *next* month.
+    Timesheets are submitted en masse once the period is complete:
+      * 1st-half (days 1-15): window opens on the 15th, due on the first
+        business day on or after the 15th.
+      * 2nd-half (days 16-end): window opens on the 1st of the next month,
+        due on the first business day on or after the 1st of the next month.
 
-    We allow uploading from the start of the period through 5 business days
-    after the due date (grace window).
+    A grace period (UPLOAD_GRACE_CALENDAR_DAYS, default 10) extends the
+    window past the due date.
     """
     if today is None:
         today = timezone.localdate()
@@ -42,18 +43,17 @@ def _submission_windows_for_today(today=None):
         probe_year = today.year + (today.month - 1 + delta_months) // 12
         probe_month = (today.month - 1 + delta_months) % 12 + 1
 
-        last_day = _calendar.monthrange(probe_year, probe_month)[1]
-
         first_half_due = _first_workday_on_or_after(_date(probe_year, probe_month, 15))
-        if probe_month == 12:
-            second_half_due = _first_workday_on_or_after(_date(probe_year + 1, 1, 1))
-        else:
-            second_half_due = _first_workday_on_or_after(_date(probe_year, probe_month + 1, 1))
-
-        first_half_open = _date(probe_year, probe_month, 1)
+        first_half_open = _date(probe_year, probe_month, 15)
         first_half_close = first_half_due + _timedelta(days=grace_calendar_days)
 
-        second_half_open = _date(probe_year, probe_month, 16)
+        if probe_month == 12:
+            next_month_1st = _date(probe_year + 1, 1, 1)
+        else:
+            next_month_1st = _date(probe_year, probe_month + 1, 1)
+
+        second_half_due = _first_workday_on_or_after(next_month_1st)
+        second_half_open = next_month_1st
         second_half_close = second_half_due + _timedelta(days=grace_calendar_days)
 
         if first_half_open <= today <= first_half_close:
