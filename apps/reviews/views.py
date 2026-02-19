@@ -28,11 +28,13 @@ try:
 except ImportError:
     HAS_OPENPYXL = False
 
+import json
+
 from apps.timesheets.models import Timesheet, TimesheetLine, TimeEntry, ChargeCode, TimesheetUpload, ClientMapping
 from apps.expenses.models import ExpenseReport, ExpenseCategory, ExpenseItem
 from apps.periods.models import TimesheetPeriod, ExpenseMonth
 from apps.accounts.models import User, EmployeeProfile
-from .models import ReviewAction, ReviewComment
+from .models import ReviewAction, ReviewComment, ManagingPartnerLayout
 
 
 def _parse_month_param(value):
@@ -100,6 +102,19 @@ def payroll_partner_required(view_func):
             name__in=["payroll_partner", "managing_partner"]
         ).exists() and not request.user.is_superuser:
             return HttpResponseForbidden("Access denied. Payroll Partner role required.")
+        return view_func(request, *args, **kwargs)
+    return wrapped
+
+
+def managing_partner_only_required(view_func):
+    """Restrict access to managing_partner group or superuser only."""
+    def wrapped(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect("account_login")
+        if not request.user.groups.filter(
+            name="managing_partner"
+        ).exists() and not request.user.is_superuser:
+            return HttpResponseForbidden("Access denied. Managing Partner role required.")
         return view_func(request, *args, **kwargs)
     return wrapped
 
@@ -588,19 +603,18 @@ def daily_summary(request, period_id=None):
                     "daily_totals": {d: None for d in dates},
                     "total_hours": Decimal("0"),
                     "missing": True,
-                    "flags": {"incomplete": set(), "high_hours": set()},
+                    "flags": {"incomplete": set(), "high_hours": set(), "weekly_hours_flag": set()},
                 })
                 continue
 
             daily_map = upload.parsed_json.get("time", {}).get(half_key, {}).get("daily_totals", {})
             daily_totals = {d: Decimal(str(daily_map.get(d.isoformat(), 0))) for d in dates}
 
-            flags = {"incomplete": set(), "high_hours": set()}
+            flags = {"incomplete": set(), "high_hours": set(), "weekly_hours_flag": set()}
             for d, hours in daily_totals.items():
                 if d.weekday() < 5 and hours < min_weekday_hours:
                     flags["incomplete"].add(d)
 
-            # High hours week rule across full month
             all_daily = {}
             for half in ("first_half", "second_half"):
                 half_map = upload.parsed_json.get("time", {}).get(half, {}).get("daily_totals", {})
@@ -610,11 +624,23 @@ def daily_summary(request, period_id=None):
             weekly = defaultdict(list)
             for day_str, hours in all_daily.items():
                 day = date.fromisoformat(day_str)
-                if hours > high_hours:
+                if hours >= high_hours:
                     weekly[day.isocalendar()[:2]].append(day)
             for week_days in weekly.values():
-                if len(week_days) > high_days_threshold:
+                if len(week_days) >= 3:
                     flags["high_hours"].update(week_days)
+
+            weekly_totals_map = defaultdict(Decimal)
+            for day_str, hrs in all_daily.items():
+                day = date.fromisoformat(day_str)
+                week_key = day.isocalendar()[:2]
+                weekly_totals_map[week_key] += Decimal(str(hrs))
+            for week_key, total_hrs in weekly_totals_map.items():
+                if total_hrs < 35 or total_hrs > 55:
+                    for day_str in all_daily.keys():
+                        day = date.fromisoformat(day_str)
+                        if day.isocalendar()[:2] == week_key:
+                            flags["weekly_hours_flag"].add(day)
 
             total = sum(daily_totals.values())
             rows.append({
@@ -968,6 +994,7 @@ def employee_expenses(request):
     columns = [("client_exp", "Client Expenses")]
     columns += list(_EXPENSE_BUCKET_LABELS)
 
+    non_client_threshold = Decimal("1000")
     rows = []
     column_totals = {col_id: Decimal("0") for col_id, _ in columns}
 
@@ -975,6 +1002,7 @@ def employee_expenses(request):
         upload = _latest_upload_for_user(emp, year, month)
         row_values = {}
         row_total = Decimal("0")
+        expense_flags = {}
 
         if upload:
             expenses = upload.parsed_json.get("expenses", {})
@@ -983,7 +1011,10 @@ def employee_expenses(request):
             row_values["client_exp"] = Decimal(str(expenses.get("client_billed_total", 0)))
 
             for col_id, bucket_label in _EXPENSE_BUCKET_LABELS:
-                row_values[col_id] = Decimal(str(totals_by_bucket.get(bucket_label, 0)))
+                amt = Decimal(str(totals_by_bucket.get(bucket_label, 0)))
+                row_values[col_id] = amt
+                if amt > non_client_threshold:
+                    expense_flags[col_id] = True
 
         for col_id, _ in columns:
             v = row_values.get(col_id, Decimal("0"))
@@ -995,6 +1026,7 @@ def employee_expenses(request):
             "values": row_values,
             "total": row_total,
             "missing": upload is None,
+            "expense_flags": expense_flags,
         })
 
     grand_total = sum(column_totals.values())
@@ -1211,6 +1243,411 @@ def partner_export_xlsx(request, year, month):
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
     filename = f"partner_summary_{year}_{month:02d}.xlsx"
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+# =============================================================================
+# MANAGING PARTNER SPREADSHEET VIEW
+# =============================================================================
+
+def _build_mp_matrix(employees_ordered, uploads_by_user, ordered_client_codes,
+                     client_order, client_labels, half_key):
+    """Build the matrix for one half of the Managing Partner spreadsheet."""
+    marketing_rows_def = [
+        ("Marketing - General/Other", "GEN"),
+        ("Chicago - Strategics", "CHI-STRAT"),
+        ("Chicago - Banks", "CHI-BNK"),
+        ("Chicago - Existing", "CHI-EXST"),
+        ("Chicago - PE", "CHI-PEG"),
+        ("Atlanta - Strategics", "ATL-STRAT"),
+        ("Atlanta - Banks", "ATL-BNK"),
+        ("Atlanta - Existing", "ATL-EXST"),
+        ("Atlanta - PE", "ATL-PEG"),
+        ("Los Angeles - Strategics", "LAX-STRAT"),
+        ("Los Angeles - Banks", "LAX-BNK"),
+        ("Los Angeles - Existing", "LAX-EXST"),
+        ("Los Angeles - PE", "LAX-PEG"),
+    ]
+    other_rows_def = [
+        ("Administration", "ADM"),
+        ("Recruiting", "REC"),
+        ("Training", "TRN"),
+        ("Meetings", "MTG"),
+        ("PTO", "PTO"),
+        ("Other Paid Time Off", "HOL+OFF"),
+    ]
+
+    matrix = []
+    chargeable_totals = {emp.id: Decimal("0") for emp in employees_ordered}
+    marketing_totals = {emp.id: Decimal("0") for emp in employees_ordered}
+    other_totals = {emp.id: Decimal("0") for emp in employees_ordered}
+
+    for code in ordered_client_codes:
+        mapping = next((c for c in client_order if c.code == code), None)
+        label = mapping.display_name if mapping else client_labels.get(code, code)
+        active = mapping.active if mapping else True
+        row = {"label": label, "code": code, "group": "client",
+               "active": "Active" if active else "Inactive", "values": {}}
+        total = Decimal("0")
+        for emp in employees_ordered:
+            upload = uploads_by_user.get(emp.id)
+            hours = Decimal("0")
+            if upload:
+                hours = Decimal(str(upload.parsed_json.get("time", {}).get(
+                    half_key, {}).get("totals_by_client_code", {}).get(code, 0)))
+            row["values"][emp.id] = hours
+            total += hours
+            chargeable_totals[emp.id] += hours
+        row["total"] = total
+        matrix.append(row)
+
+    matrix.append({
+        "label": "Total Chargeable", "group": "total_chargeable",
+        "values": dict(chargeable_totals), "total": sum(chargeable_totals.values()),
+    })
+
+    for label, code in marketing_rows_def:
+        row = {"label": label, "code": code, "group": "marketing", "values": {}}
+        total = Decimal("0")
+        for emp in employees_ordered:
+            upload = uploads_by_user.get(emp.id)
+            hours = Decimal("0")
+            if upload:
+                hours = Decimal(str(upload.parsed_json.get("time", {}).get(
+                    half_key, {}).get("totals_by_marketing_bucket", {}).get(code, 0)))
+            row["values"][emp.id] = hours
+            total += hours
+            marketing_totals[emp.id] += hours
+        row["total"] = total
+        matrix.append(row)
+
+    matrix.append({
+        "label": "Total Marketing", "group": "total_marketing",
+        "values": dict(marketing_totals), "total": sum(marketing_totals.values()),
+    })
+
+    for label, code in other_rows_def:
+        row = {"label": label, "code": code, "group": "other", "values": {}}
+        total = Decimal("0")
+        for emp in employees_ordered:
+            upload = uploads_by_user.get(emp.id)
+            hours = Decimal("0")
+            if upload:
+                other_totals_data = upload.parsed_json.get("time", {}).get(
+                    half_key, {}).get("totals_by_other_hours", {})
+                if code == "HOL+OFF":
+                    hours = (Decimal(str(other_totals_data.get("HOL", 0)))
+                             + Decimal(str(other_totals_data.get("OFF", 0))))
+                else:
+                    hours = Decimal(str(other_totals_data.get(code, 0)))
+            row["values"][emp.id] = hours
+            total += hours
+            other_totals[emp.id] += hours
+        row["total"] = total
+        matrix.append(row)
+
+    matrix.append({
+        "label": "Total Other Hours", "group": "total_other",
+        "values": dict(other_totals), "total": sum(other_totals.values()),
+    })
+
+    grand = {eid: chargeable_totals[eid] + marketing_totals[eid] + other_totals[eid]
+             for eid in chargeable_totals}
+    matrix.append({
+        "label": "Total Hours", "group": "grand_total",
+        "values": grand, "total": sum(grand.values()),
+    })
+
+    return matrix
+
+
+@login_required
+@managing_partner_only_required
+def mp_spreadsheet(request):
+    """Managing Partner spreadsheet view replicating the Excel layout."""
+    year, month = _parse_month_param(request.GET.get("month"))
+    employees = _active_employees()
+
+    layout, _ = ManagingPartnerLayout.objects.get_or_create(
+        year=year, month=month,
+        defaults={"employee_order": [], "client_order": []}
+    )
+
+    uploads_by_user = {}
+    client_codes = set()
+    client_labels = {}
+    for emp in employees:
+        upload = _latest_upload_for_user(emp, year, month)
+        if upload:
+            uploads_by_user[emp.id] = upload
+            for half_key in ("first_half", "second_half"):
+                for line in upload.parsed_json.get("time", {}).get(half_key, {}).get("lines", []):
+                    if line.get("group") == "client" and line.get("charge_code"):
+                        code = line["charge_code"]
+                        client_codes.add(code)
+                        if code not in client_labels:
+                            client_labels[code] = line.get("label") or code
+
+    client_order = list(
+        ClientMapping.objects.filter(active=True).order_by("sort_order", "display_name")
+    )
+    client_order_codes = [c.code for c in client_order]
+    default_codes = [c for c in client_order_codes if c in client_codes and c and c != "0"]
+    default_codes += sorted(
+        [c for c in client_codes if c not in default_codes and c and c != "0"]
+    )
+
+    emp_map = {emp.id: emp for emp in employees}
+    active_ids = set(emp_map.keys())
+
+    if layout.employee_order:
+        ordered_ids = [eid for eid in layout.employee_order if eid in active_ids]
+        for emp in employees:
+            if emp.id not in ordered_ids:
+                ordered_ids.append(emp.id)
+        employees_ordered = [emp_map[eid] for eid in ordered_ids if eid in emp_map]
+    else:
+        employees_ordered = list(employees)
+        layout.employee_order = [emp.id for emp in employees_ordered]
+
+    if layout.client_order:
+        ordered_codes = [c for c in layout.client_order if c in client_codes]
+        for code in default_codes:
+            if code not in ordered_codes:
+                ordered_codes.append(code)
+    else:
+        ordered_codes = default_codes
+        layout.client_order = ordered_codes
+
+    layout.save(update_fields=["employee_order", "client_order", "updated_at"])
+
+    first_matrix = _build_mp_matrix(
+        employees_ordered, uploads_by_user, ordered_codes,
+        client_order, client_labels, "first_half",
+    )
+    second_matrix = _build_mp_matrix(
+        employees_ordered, uploads_by_user, ordered_codes,
+        client_order, client_labels, "second_half",
+    )
+
+    month_options = (
+        TimesheetUpload.objects.values_list("year", "month")
+        .distinct()
+        .order_by("-year", "-month")[:12]
+    )
+    if (year, month) not in month_options:
+        month_options = [(year, month)] + list(month_options)
+
+    from django.urls import reverse
+    export_url = reverse("reviews:mp_export_xlsx", args=[year, month])
+
+    context = {
+        "employees": employees_ordered,
+        "month_label": _month_label(year, month),
+        "month_param": f"{year}-{month:02d}",
+        "month_options": month_options,
+        "first_matrix": first_matrix,
+        "second_matrix": second_matrix,
+        "export_url": export_url,
+    }
+    return render(request, "reviews/managing_partner/mp_spreadsheet.html", context)
+
+
+@login_required
+@managing_partner_only_required
+@require_POST
+def mp_reorder(request):
+    """AJAX endpoint to persist drag-and-drop reorder changes."""
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    year = data.get("year")
+    month = data.get("month")
+    field = data.get("field")
+    order = data.get("order")
+
+    if not all([year, month, field, order]) or field not in ("employee_order", "client_order"):
+        return JsonResponse({"error": "Bad request"}, status=400)
+
+    layout, _ = ManagingPartnerLayout.objects.get_or_create(
+        year=int(year), month=int(month),
+        defaults={"employee_order": [], "client_order": []}
+    )
+
+    if field == "employee_order":
+        layout.employee_order = [int(x) for x in order]
+    else:
+        layout.client_order = list(order)
+
+    layout.updated_by = request.user
+    layout.save()
+    return JsonResponse({"ok": True})
+
+
+@login_required
+@managing_partner_only_required
+def mp_export_xlsx(request, year, month):
+    """Export the Managing Partner spreadsheet as Excel, respecting custom ordering."""
+    if not HAS_OPENPYXL:
+        return HttpResponse("openpyxl not installed", status=500)
+
+    employees = _active_employees()
+
+    layout, _ = ManagingPartnerLayout.objects.get_or_create(
+        year=year, month=month,
+        defaults={"employee_order": [], "client_order": []}
+    )
+
+    uploads_by_user = {}
+    client_codes = set()
+    client_labels_map = {}
+    for emp in employees:
+        upload = _latest_upload_for_user(emp, year, month)
+        if upload:
+            uploads_by_user[emp.id] = upload
+            for half_key in ("first_half", "second_half"):
+                for line in upload.parsed_json.get("time", {}).get(half_key, {}).get("lines", []):
+                    if line.get("group") == "client" and line.get("charge_code"):
+                        code = line["charge_code"]
+                        client_codes.add(code)
+                        if code not in client_labels_map:
+                            client_labels_map[code] = line.get("label") or code
+
+    client_order_objs = list(
+        ClientMapping.objects.filter(active=True).order_by("sort_order", "display_name")
+    )
+    client_order_codes = [c.code for c in client_order_objs]
+    default_codes = [c for c in client_order_codes if c in client_codes and c and c != "0"]
+    default_codes += sorted(
+        [c for c in client_codes if c not in default_codes and c and c != "0"]
+    )
+
+    emp_map = {emp.id: emp for emp in employees}
+    active_ids = set(emp_map.keys())
+
+    if layout.employee_order:
+        ordered_ids = [eid for eid in layout.employee_order if eid in active_ids]
+        for emp in employees:
+            if emp.id not in ordered_ids:
+                ordered_ids.append(emp.id)
+        employees_ordered = [emp_map[eid] for eid in ordered_ids if eid in emp_map]
+    else:
+        employees_ordered = list(employees)
+
+    if layout.client_order:
+        ordered_codes = [c for c in layout.client_order if c in client_codes]
+        for code in default_codes:
+            if code not in ordered_codes:
+                ordered_codes.append(code)
+    else:
+        ordered_codes = default_codes
+
+    first_matrix = _build_mp_matrix(
+        employees_ordered, uploads_by_user, ordered_codes,
+        client_order_objs, client_labels_map, "first_half",
+    )
+    second_matrix = _build_mp_matrix(
+        employees_ordered, uploads_by_user, ordered_codes,
+        client_order_objs, client_labels_map, "second_half",
+    )
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Time Collection"
+    header_font = Font(bold=True, size=11)
+    header_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+    total_font = Font(bold=True, size=10)
+    section_font = Font(bold=True, size=10, color="333333")
+    section_fill = PatternFill(start_color="D9E2F3", end_color="D9E2F3", fill_type="solid")
+
+    ws.cell(row=1, column=1, value="Time Collection").font = Font(bold=True, size=14)
+
+    emp_initials = []
+    for emp in employees_ordered:
+        initials = emp.profile_or_none.initials if emp.profile_or_none else emp.first_name[:2].upper()
+        emp_initials.append(initials or emp.first_name[:2].upper())
+
+    ws.cell(row=3, column=2, value="Active / Inactive").font = header_font
+    ws.cell(row=3, column=2).fill = header_fill
+    for ci, init in enumerate(emp_initials, 3):
+        cell = ws.cell(row=3, column=ci, value=init)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+    ws.cell(row=3, column=len(emp_initials) + 3, value="Total").font = header_font
+    ws.cell(row=3, column=len(emp_initials) + 3).fill = header_fill
+
+    def write_half(start_row, matrix, half_label):
+        row_idx = start_row
+        ws.cell(row=row_idx, column=1, value=half_label).font = Font(bold=True, size=12)
+        row_idx += 2
+
+        for entry in matrix:
+            label = entry["label"]
+            group = entry.get("group", "")
+
+            if group == "total_chargeable":
+                row_idx += 1
+
+            if group == "marketing" and entry.get("code") == "GEN":
+                row_idx += 1
+                ws.cell(row=row_idx, column=1, value="Marketing").font = section_font
+                ws.cell(row=row_idx, column=1).fill = section_fill
+                row_idx += 1
+
+            if group == "other" and entry.get("code") == "ADM":
+                row_idx += 1
+                ws.cell(row=row_idx, column=1, value="Other Hours").font = section_font
+                ws.cell(row=row_idx, column=1).fill = section_fill
+                row_idx += 1
+
+            is_total = group in ("total_chargeable", "total_marketing", "total_other", "grand_total")
+            ws.cell(row=row_idx, column=1, value=label)
+            if is_total:
+                ws.cell(row=row_idx, column=1).font = total_font
+
+            if group == "client":
+                ws.cell(row=row_idx, column=2, value=entry.get("active", "Active"))
+
+            for ci, emp in enumerate(employees_ordered, 3):
+                val = float(entry["values"].get(emp.id, 0))
+                cell = ws.cell(row=row_idx, column=ci, value=val if val else None)
+                cell.alignment = Alignment(horizontal="center")
+                if is_total:
+                    cell.font = total_font
+
+            total_val = float(entry.get("total", 0))
+            total_cell = ws.cell(
+                row=row_idx, column=len(employees_ordered) + 3,
+                value=total_val if total_val else None,
+            )
+            if is_total:
+                total_cell.font = total_font
+
+            row_idx += 1
+
+        return row_idx
+
+    next_row = write_half(4, first_matrix, "Period One")
+    next_row += 2
+    write_half(next_row, second_matrix, "Period Two")
+
+    ws.column_dimensions["A"].width = 30
+    ws.column_dimensions["B"].width = 16
+    for ci in range(3, len(employees_ordered) + 4):
+        ws.column_dimensions[get_column_letter(ci)].width = 8
+
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    response = HttpResponse(
+        buffer.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    filename = f"managing_partner_{year}_{month:02d}.xlsx"
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response
 

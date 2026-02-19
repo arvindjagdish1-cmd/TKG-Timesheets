@@ -39,6 +39,11 @@ urlpatterns = [
     path("partner/expenses/", views.employee_expenses, name="employee_expenses"),
     path("partner/export/<int:year>/<int:month>/", views.partner_export_xlsx, name="partner_export_xlsx"),
 
+    # Managing Partner Spreadsheet
+    path("mp/", views.mp_spreadsheet, name="mp_spreadsheet"),
+    path("mp/reorder/", views.mp_reorder, name="mp_reorder"),
+    path("mp/export/<int:year>/<int:month>/", views.mp_export_xlsx, name="mp_export_xlsx"),
+
     # Payroll Partner Views
     path("payroll/", views.payroll_dashboard, name="payroll_dashboard"),
     path("payroll/export/<int:year>/<int:month>/", views.payroll_export, name="payroll_export"),

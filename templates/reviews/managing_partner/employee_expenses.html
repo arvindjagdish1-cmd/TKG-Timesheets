@@ -42,6 +42,11 @@
         background: var(--ks-danger-subtle) !important;
         color: var(--ks-danger) !important;
     }
+    .expense-flag {
+        background: var(--ks-danger-subtle) !important;
+        color: var(--ks-danger) !important;
+        font-weight: 600;
+    }
 </style>
 {% endblock %}
 
@@ -113,7 +118,7 @@
                             {{ row.employee.get_full_name|default:row.employee.email }}
                         </td>
                         {% for col_id, col_label in columns %}
-                        <td>{{ row.values|get_item:col_id|zero_dash }}</td>
+                        <td class="{% if row.expense_flags|in_dict:col_id %}expense-flag{% endif %}">{{ row.values|get_item:col_id|zero_dash }}</td>
                         {% endfor %}
                         <td class="total-cell">{{ row.total|zero_dash }}</td>
                     </tr>

@@ -254,7 +254,7 @@ def _validate_time_half(half_data, issues, sheet_name, enforce_minimums=True):
         if half_has_hours and day.weekday() < 5 and hours < min_weekday_hours:
             _add_issue(
                 issues,
-                minimum_severity,
+                WARN,
                 "TIME_DAILY_MINIMUM_NOT_MET",
                 f"Weekday total is below minimum: {hours} hours.",
                 location=f"{sheet_name}!{day.isoformat()}",

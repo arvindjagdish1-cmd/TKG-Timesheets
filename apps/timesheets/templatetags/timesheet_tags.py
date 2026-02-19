@@ -33,3 +33,11 @@ def zero_dash(value):
     if num == 0:
         return "-"
     return f"{num:,.0f}"
+
+
+@register.filter
+def in_dict(dictionary, key):
+    """Return True if key exists and is truthy in dictionary."""
+    if dictionary is None:
+        return False
+    return bool(dictionary.get(key))

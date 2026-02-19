@@ -694,8 +694,11 @@
             <a href="{% url 'exports:export_dashboard' %}" class="nav-link {% if 'exports' in request.path %}active{% endif %}">
                 <i class="bi bi-file-earmark-arrow-down"></i> Export Reports
             </a>
-            <a href="{% url 'reviews:partner_dashboard' %}" class="nav-link {% if 'partner' in request.path %}active{% endif %}">
+            <a href="{% url 'reviews:partner_dashboard' %}" class="nav-link {% if 'partner' in request.path and 'mp' not in request.path %}active{% endif %}">
                 <i class="bi bi-person-workspace"></i> Partner Summary
+            </a>
+            <a href="{% url 'reviews:mp_spreadsheet' %}" class="nav-link {% if 'mp' in request.path %}active{% endif %}">
+                <i class="bi bi-table"></i> Managing Partner
             </a>
             <a href="{% url 'reviews:payroll_dashboard' %}" class="nav-link {% if 'payroll' in request.path %}active{% endif %}">
                 <i class="bi bi-cash-coin"></i> Payroll Export

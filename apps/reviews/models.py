@@ -95,3 +95,38 @@ class ReviewComment(models.Model):
     def __str__(self):
         truncated = self.text[:50] + "..." if len(self.text) > 50 else self.text
         return f"{self.author.get_short_name()}: {truncated}"
+
+
+class ManagingPartnerLayout(models.Model):
+    """
+    Persists the custom column (employee) and row (client project) ordering
+    for the Managing Partner spreadsheet view, per month.
+    """
+
+    year = models.IntegerField()
+    month = models.IntegerField()
+    employee_order = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Ordered list of User PKs for column ordering.",
+    )
+    client_order = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Ordered list of client charge codes for row ordering.",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [("year", "month")]
+        verbose_name = "managing partner layout"
+        verbose_name_plural = "managing partner layouts"
+
+    def __str__(self):
+        return f"MP Layout {self.year}-{self.month:02d}"
