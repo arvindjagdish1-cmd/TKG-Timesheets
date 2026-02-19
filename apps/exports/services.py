@@ -30,6 +30,147 @@ def get_export_root():
     return root
 
 
+def generate_upload_xlsx(upload):
+    """
+    Generate a formatted XLSX from a TimesheetUpload's parsed_json data.
+
+    Args:
+        upload: TimesheetUpload model instance
+
+    Returns:
+        Path to generated file
+    """
+    from datetime import date as date_type
+    from calendar import monthrange
+
+    employee = upload.user
+    year, month = upload.year, upload.month
+    parsed = upload.parsed_json or {}
+    time_data = parsed.get("time", {})
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Timesheet"
+
+    header_font = Font(bold=True, size=12)
+    header_fill = PatternFill(start_color="1a365d", end_color="1a365d", fill_type="solid")
+    header_font_white = Font(bold=True, size=11, color="FFFFFF")
+    border = Border(
+        left=Side(style="thin"),
+        right=Side(style="thin"),
+        top=Side(style="thin"),
+        bottom=Side(style="thin"),
+    )
+
+    ws["A1"] = "TKG Time Sheet"
+    ws["A1"].font = Font(bold=True, size=16)
+    ws["A3"] = "Employee:"
+    ws["B3"] = employee.get_full_name()
+    ws["A4"] = "Period:"
+    ws["B4"] = f"{year}-{month:02d}"
+    ws["A5"] = "Status:"
+    ws["B5"] = upload.get_status_display()
+
+    def _write_half(start_row, half_key, half_label):
+        half = time_data.get(half_key, {})
+        lines = half.get("lines", [])
+        daily_totals = half.get("daily_totals", {})
+
+        if half_key == "first_half":
+            dates = [date_type(year, month, d) for d in range(1, 16)]
+        else:
+            last_day = monthrange(year, month)[1]
+            dates = [date_type(year, month, d) for d in range(16, last_day + 1)]
+
+        row = start_row
+        ws.cell(row=row, column=1, value=half_label).font = Font(bold=True, size=12)
+        row += 1
+
+        ws.cell(row=row, column=1, value="Charge Code").font = header_font_white
+        ws.cell(row=row, column=1).fill = header_fill
+        ws.cell(row=row, column=2, value="Description").font = header_font_white
+        ws.cell(row=row, column=2).fill = header_fill
+
+        for i, d in enumerate(dates):
+            cell = ws.cell(row=row, column=3 + i, value=d.strftime("%m/%d\n%a"))
+            cell.font = header_font_white
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center", wrap_text=True)
+            ws.column_dimensions[get_column_letter(3 + i)].width = 8
+
+        total_col = 3 + len(dates)
+        ws.cell(row=row, column=total_col, value="Total").font = header_font_white
+        ws.cell(row=row, column=total_col).fill = header_fill
+        row += 1
+
+        for line in lines:
+            code = line.get("charge_code", "")
+            label = line.get("label", code)
+            ws.cell(row=row, column=1, value=code).border = border
+            ws.cell(row=row, column=2, value=label).border = border
+
+            daily = line.get("daily", {})
+            line_total = Decimal("0")
+            for i, d in enumerate(dates):
+                hours = Decimal(str(daily.get(d.isoformat(), 0)))
+                cell = ws.cell(
+                    row=row, column=3 + i,
+                    value=float(hours) if hours else None,
+                )
+                cell.border = border
+                cell.alignment = Alignment(horizontal="center")
+                line_total += hours
+
+            ws.cell(row=row, column=total_col, value=float(line_total)).border = border
+            ws.cell(row=row, column=total_col).font = Font(bold=True)
+            row += 1
+
+        ws.cell(row=row, column=1, value="Daily Total").font = Font(bold=True)
+        ws.cell(row=row, column=1).fill = PatternFill(
+            start_color="f0f0f0", fill_type="solid"
+        )
+        grand = Decimal("0")
+        for i, d in enumerate(dates):
+            day_total = Decimal(str(daily_totals.get(d.isoformat(), 0)))
+            cell = ws.cell(row=row, column=3 + i, value=float(day_total))
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill(start_color="f0f0f0", fill_type="solid")
+            cell.border = border
+            grand += day_total
+
+        ws.cell(row=row, column=total_col, value=float(grand)).font = Font(
+            bold=True, size=12
+        )
+        ws.cell(row=row, column=total_col).fill = PatternFill(
+            start_color="c6f6d5", fill_type="solid"
+        )
+        row += 1
+        return row
+
+    ws.column_dimensions["A"].width = 14
+    ws.column_dimensions["B"].width = 28
+
+    next_row = _write_half(8, "first_half", "Period One (1st – 15th)")
+    next_row += 1
+    _write_half(next_row, "second_half", "Period Two (16th – End)")
+
+    row = ws.max_row + 2
+    ws.cell(
+        row=row, column=1,
+        value=f"Generated: {timezone.now().strftime('%Y-%m-%d %H:%M')}",
+    )
+
+    output_dir = get_export_root() / f"{year}" / f"{month:02d}"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_name = employee.get_full_name().replace(" ", "_").replace("/", "-")
+    filename = f"timesheet_{year}_{month:02d}_{safe_name}.xlsx"
+    output_path = output_dir / filename
+
+    wb.save(output_path)
+    return output_path
+
+
 def generate_timesheet_xlsx(timesheet):
     """
     Generate XLSX for a single timesheet.

@@ -52,6 +52,7 @@ ROSTER = [
     ("jmathisson@thekeystonegroup.com", "Jonah", "Mathisson", "analyst"),
     ("prajski@thekeystonegroup.com", "Paulina", "Rajski", "analyst"),
     ("bmoxon@thekeystonegroup.com", "Beth", "Moxon", "program_coordinator"),
+    ("lschram@thekeystonegroup.com", "Lori", "Schram", "program_coordinator"),
     ("ajagdish@thekeystonegroup.com", "Arvind", "Jagdish", "senior_analyst"),
 ]
 

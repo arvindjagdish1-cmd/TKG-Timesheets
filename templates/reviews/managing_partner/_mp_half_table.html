@@ -34,11 +34,11 @@
                 <tbody class="client-sortable" id="clients-{{ table_id }}">
                     {% for row in matrix %}
                     {% if row.group == "client" %}
-                    <tr data-code="{{ row.code }}">
+                    <tr data-project="{{ row.label }}" {% if row.active == "Inactive" %}class="inactive-project"{% endif %}>
                         <td class="project-cell" title="{{ row.label }}">
                             <i class="bi bi-grip-vertical text-muted me-1" style="font-size:0.6rem;"></i>{{ row.label }}
                         </td>
-                        <td class="status-cell">{{ row.active|default:"Active" }}</td>
+                        <td class="status-cell {% if row.active == 'Inactive' %}text-danger{% endif %}">{{ row.active|default:"Active" }}</td>
                         {% for emp in employees %}
                         <td>{{ row.values|get_item:emp.id|zero_dash }}</td>
                         {% endfor %}

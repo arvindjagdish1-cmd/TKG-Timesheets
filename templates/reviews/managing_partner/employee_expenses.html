@@ -81,12 +81,10 @@
             <div class="col-md-4">
                 <label class="form-label">Month</label>
                 <select name="month" class="form-select">
-                    {% for year, month in month_options %}
-                    {% with value=year|stringformat:"04d"|add:"-"|add:month|stringformat:"02d" %}
-                    <option value="{{ value }}" {% if value == month_param %}selected{% endif %}>
-                        {{ year }}-{{ month|stringformat:"02d" }}
+                    {% for opt in month_options %}
+                    <option value="{{ opt.value }}" {% if opt.selected %}selected{% endif %}>
+                        {{ opt.label }}
                     </option>
-                    {% endwith %}
                     {% endfor %}
                 </select>
             </div>

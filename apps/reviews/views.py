@@ -53,6 +53,19 @@ def _month_label(year, month):
     return date(year, month, 1).strftime("%B %Y")
 
 
+def _month_options(raw_qs, selected_year, selected_month):
+    """Build pre-formatted month options for template dropdowns."""
+    sel = f"{selected_year}-{selected_month:02d}"
+    return [
+        {
+            "value": f"{y}-{m:02d}",
+            "label": date(y, m, 1).strftime("%B %Y"),
+            "selected": f"{y}-{m:02d}" == sel,
+        }
+        for y, m in raw_qs
+    ]
+
+
 def _active_employees():
     return User.objects.filter(
         is_active=True,
@@ -127,13 +140,13 @@ def review_dashboard(request):
     status_filter = request.GET.get("status", "ALL")
     status_options = ["ALL", "DRAFT", "SUBMITTED", "RETURNED", "APPROVED", "MISSING"]
 
-    months = (
+    raw_months = (
         TimesheetUpload.objects.values_list("year", "month")
         .distinct()
         .order_by("-year", "-month")[:6]
     )
-    if (year, month) not in months:
-        months = [(year, month)] + list(months)
+    if (year, month) not in raw_months:
+        raw_months = [(year, month)] + list(raw_months)
 
     rows = []
     pending_count = 0
@@ -177,8 +190,7 @@ def review_dashboard(request):
 
     context = {
         "rows": rows,
-        "month_options": months,
-        "selected_month": f"{year}-{month:02d}",
+        "month_options": _month_options(raw_months, year, month),
         "selected_month_label": _month_label(year, month),
         "status_filter": status_filter,
         "status_options": status_options,
@@ -559,18 +571,17 @@ def _check_flags(daily_hours):
 @managing_partner_required
 def managing_partner_dashboard(request):
     """Managing Partner dashboard with period selection."""
-    today = timezone.now().date()
     year, month = _parse_month_param(request.GET.get("month"))
-    months = (
+    raw_months = (
         TimesheetUpload.objects.values_list("year", "month")
         .distinct()
         .order_by("-year", "-month")[:12]
     )
-    if (year, month) not in months:
-        months = [(year, month)] + list(months)
+    if (year, month) not in raw_months:
+        raw_months = [(year, month)] + list(raw_months)
 
     context = {
-        "month_options": months,
+        "month_options": _month_options(raw_months, year, month),
         "selected_month": f"{year}-{month:02d}",
         "selected_month_label": _month_label(year, month),
     }
@@ -589,9 +600,7 @@ def daily_summary(request, period_id=None):
     second_dates = [date(year, month, d) for d in range(16, last_day + 1)]
 
     employees = _active_employees()
-    min_weekday_hours = Decimal(str(getattr(settings, "MIN_WEEKDAY_HOURS", 8)))
     high_hours = Decimal(str(getattr(settings, "HIGH_HOURS_THRESHOLD", 10)))
-    high_days_threshold = getattr(settings, "HIGH_HOURS_DAYS_PER_WEEK_THRESHOLD", 2)
 
     def build_rows(dates, half_key):
         rows = []
@@ -603,17 +612,14 @@ def daily_summary(request, period_id=None):
                     "daily_totals": {d: None for d in dates},
                     "total_hours": Decimal("0"),
                     "missing": True,
-                    "flags": {"incomplete": set(), "high_hours": set(), "weekly_hours_flag": set()},
+                    "flags": {"high_hours": set(), "weekly_hours_flag": set()},
                 })
                 continue
 
             daily_map = upload.parsed_json.get("time", {}).get(half_key, {}).get("daily_totals", {})
             daily_totals = {d: Decimal(str(daily_map.get(d.isoformat(), 0))) for d in dates}
 
-            flags = {"incomplete": set(), "high_hours": set(), "weekly_hours_flag": set()}
-            for d, hours in daily_totals.items():
-                if d.weekday() < 5 and hours < min_weekday_hours:
-                    flags["incomplete"].add(d)
+            flags = {"high_hours": set(), "weekly_hours_flag": set()}
 
             all_daily = {}
             for half in ("first_half", "second_half"):
@@ -624,18 +630,25 @@ def daily_summary(request, period_id=None):
             weekly = defaultdict(list)
             for day_str, hours in all_daily.items():
                 day = date.fromisoformat(day_str)
-                if hours >= high_hours:
+                if day.weekday() < 5 and hours >= high_hours:
                     weekly[day.isocalendar()[:2]].append(day)
             for week_days in weekly.values():
                 if len(week_days) >= 3:
                     flags["high_hours"].update(week_days)
 
             weekly_totals_map = defaultdict(Decimal)
+            weekdays_per_week = defaultdict(int)
             for day_str, hrs in all_daily.items():
                 day = date.fromisoformat(day_str)
+                if day.weekday() >= 5:
+                    continue
                 week_key = day.isocalendar()[:2]
                 weekly_totals_map[week_key] += Decimal(str(hrs))
+                weekdays_per_week[week_key] += 1
             for week_key, total_hrs in weekly_totals_map.items():
+                n_days = weekdays_per_week.get(week_key, 0)
+                if n_days < 3:
+                    continue
                 if total_hrs < 35 or total_hrs > 55:
                     for day_str in all_daily.keys():
                         day = date.fromisoformat(day_str)
@@ -652,27 +665,24 @@ def daily_summary(request, period_id=None):
             })
         return rows
 
-    month_options = (
+    raw_months = (
         TimesheetUpload.objects.values_list("year", "month")
         .distinct()
         .order_by("-year", "-month")[:12]
     )
-    if (year, month) not in month_options:
-        month_options = [(year, month)] + list(month_options)
+    if (year, month) not in raw_months:
+        raw_months = [(year, month)] + list(raw_months)
 
     from django.urls import reverse
     export_url = reverse("reviews:partner_export_xlsx", args=[year, month])
 
     context = {
         "month_label": _month_label(year, month),
-        "month_param": f"{year}-{month:02d}",
-        "month_options": month_options,
+        "month_options": _month_options(raw_months, year, month),
         "first_dates": first_dates,
         "second_dates": second_dates,
         "first_rows": build_rows(first_dates, "first_half"),
         "second_rows": build_rows(second_dates, "second_half"),
-        "min_weekday_hours": float(min_weekday_hours),
-        "high_hours_threshold": float(high_hours),
         "export_url": export_url,
     }
     return render(request, "reviews/managing_partner/daily_summary.html", context)
@@ -806,13 +816,13 @@ def category_summary(request, period_id=None):
     first_matrix, first_totals = build_matrix("first_half")
     second_matrix, second_totals = build_matrix("second_half")
 
-    month_options = (
+    raw_months = (
         TimesheetUpload.objects.values_list("year", "month")
         .distinct()
         .order_by("-year", "-month")[:12]
     )
-    if (year, month) not in month_options:
-        month_options = [(year, month)] + list(month_options)
+    if (year, month) not in raw_months:
+        raw_months = [(year, month)] + list(raw_months)
 
     from django.urls import reverse
     export_url = reverse("reviews:partner_export_xlsx", args=[year, month])
@@ -820,8 +830,7 @@ def category_summary(request, period_id=None):
     context = {
         "employees": employees,
         "month_label": _month_label(year, month),
-        "month_param": f"{year}-{month:02d}",
-        "month_options": month_options,
+        "month_options": _month_options(raw_months, year, month),
         "first_matrix": first_matrix,
         "second_matrix": second_matrix,
         "first_totals": first_totals,
@@ -934,21 +943,20 @@ def employee_summary(request):
         employees, uploads_by_user, "second_half"
     )
 
-    month_options = (
+    raw_months = (
         TimesheetUpload.objects.values_list("year", "month")
         .distinct()
         .order_by("-year", "-month")[:12]
     )
-    if (year, month) not in month_options:
-        month_options = [(year, month)] + list(month_options)
+    if (year, month) not in raw_months:
+        raw_months = [(year, month)] + list(raw_months)
 
     from django.urls import reverse
     export_url = reverse("reviews:partner_export_xlsx", args=[year, month])
 
     context = {
         "month_label": _month_label(year, month),
-        "month_param": f"{year}-{month:02d}",
-        "month_options": month_options,
+        "month_options": _month_options(raw_months, year, month),
         "columns": first_columns,
         "first_rows": first_rows,
         "first_totals": first_totals,
@@ -1031,18 +1039,17 @@ def employee_expenses(request):
 
     grand_total = sum(column_totals.values())
 
-    month_options = (
+    raw_months = (
         TimesheetUpload.objects.values_list("year", "month")
         .distinct()
         .order_by("-year", "-month")[:12]
     )
-    if (year, month) not in month_options:
-        month_options = [(year, month)] + list(month_options)
+    if (year, month) not in raw_months:
+        raw_months = [(year, month)] + list(raw_months)
 
     context = {
         "month_label": _month_label(year, month),
-        "month_param": f"{year}-{month:02d}",
-        "month_options": month_options,
+        "month_options": _month_options(raw_months, year, month),
         "columns": columns,
         "rows": rows,
         "column_totals": column_totals,
@@ -1251,8 +1258,108 @@ def partner_export_xlsx(request, year, month):
 # MANAGING PARTNER SPREADSHEET VIEW
 # =============================================================================
 
-def _build_mp_matrix(employees_ordered, uploads_by_user, ordered_client_codes,
-                     client_order, client_labels, half_key):
+MP_CANONICAL_PROJECTS = [
+    "Bunn",
+    "Remprex",
+    "Ronnoco",
+    "IPS - PMO Support",
+    "IPS - Value Stream",
+    "Weinstein",
+    "Merit Brass",
+    "Barrel Craft Spirits",
+    "Breeze Autocare",
+    "Human Active Technology",
+    "Hayes Performance Systems",
+    "AASC",
+    "SNB",
+    "Lion Equity",
+    "H3 Mfg.",
+    "Med Sol",
+    "CHS",
+    "MEC",
+    "LeVecke - interim CFO",
+    "Uncle Nearest",
+    "Everde",
+    "IPS - Eng. Org",
+    "Sparkstone",
+    "Royston - SCA Costing",
+    "ASG AR recovery",
+    "Chemline",
+    "TPC",
+    "Radwell",
+    "Alliance Environmental",
+    "Forte",
+    "Golden State Foods",
+    "Sauder",
+    "Hansons",
+    "Champion Homes",
+    "Worthington",
+    "Aquamar",
+    "Bright Innovations",
+    "MEC - Muskie",
+    "Nexamotion",
+    "Edelbrock",
+    "ClarkDietrich",
+    "Charcuterie Artisans",
+    "Gerber",
+    "IPS - Coil Strategy",
+    "MEC - Mayflower",
+    "Raydia",
+    "AEM",
+    "MEC - ERM",
+    "Road Tested Parts",
+    "Sauder - Plan B",
+    "StyleCraft",
+    "Hill & Smith",
+    "Buddig",
+    "SNB Cascade",
+    "95PG",
+    "Stifel - Tempest",
+    "Pink Lily",
+    "MGG - Sawmill",
+    "WM Partners",
+    "H3 - Interco Cost Savings",
+    "GPS",
+    "IPS - Edison",
+]
+
+
+def _mp_build_label_map(uploads_by_user):
+    """Build a normalized label → charge_code mapping from all uploads."""
+    label_to_code = {}
+    for upload in uploads_by_user.values():
+        for half_key in ("first_half", "second_half"):
+            for line in upload.parsed_json.get("time", {}).get(half_key, {}).get("lines", []):
+                if line.get("group") == "client" and line.get("charge_code"):
+                    code = line["charge_code"]
+                    label = (line.get("label") or "").strip()
+                    if label:
+                        label_to_code[label] = code
+    return label_to_code
+
+
+def _mp_project_active_map(ordered_projects, label_to_code, uploads_by_user):
+    """Determine which projects have hours in either half (Active vs Inactive)."""
+    active_map = {}
+    for name in ordered_projects:
+        code = label_to_code.get(name)
+        has_hours = False
+        if code:
+            for upload in uploads_by_user.values():
+                for hk in ("first_half", "second_half"):
+                    val = upload.parsed_json.get("time", {}).get(hk, {}).get(
+                        "totals_by_client_code", {}).get(code, 0)
+                    if float(val) > 0:
+                        has_hours = True
+                        break
+                if has_hours:
+                    break
+        active_map[name] = has_hours
+    return active_map
+
+
+def _build_mp_matrix(employees_ordered, uploads_by_user, ordered_projects,
+                     label_to_code, project_active, half_key):
     """Build the matrix for one half of the Managing Partner spreadsheet."""
     marketing_rows_def = [
         ("Marketing - General/Other", "GEN"),
@@ -1283,17 +1390,16 @@ def _build_mp_matrix(employees_ordered, uploads_by_user, ordered_client_codes,
     marketing_totals = {emp.id: Decimal("0") for emp in employees_ordered}
     other_totals = {emp.id: Decimal("0") for emp in employees_ordered}
 
-    for code in ordered_client_codes:
-        mapping = next((c for c in client_order if c.code == code), None)
-        label = mapping.display_name if mapping else client_labels.get(code, code)
-        active = mapping.active if mapping else True
-        row = {"label": label, "code": code, "group": "client",
-               "active": "Active" if active else "Inactive", "values": {}}
+    for project_name in ordered_projects:
+        code = label_to_code.get(project_name)
+        is_active = project_active.get(project_name, False)
+        row = {"label": project_name, "code": code or "", "group": "client",
+               "active": "Active" if is_active else "Inactive", "values": {}}
         total = Decimal("0")
         for emp in employees_ordered:
             upload = uploads_by_user.get(emp.id)
             hours = Decimal("0")
-            if upload:
+            if upload and code:
                 hours = Decimal(str(upload.parsed_json.get("time", {}).get(
                     half_key, {}).get("totals_by_client_code", {}).get(code, 0)))
             row["values"][emp.id] = hours
@@ -1362,40 +1468,20 @@ def _build_mp_matrix(employees_ordered, uploads_by_user, ordered_client_codes,
     return matrix
 
 
-@login_required
-@managing_partner_only_required
-def mp_spreadsheet(request):
-    """Managing Partner spreadsheet view replicating the Excel layout."""
-    year, month = _parse_month_param(request.GET.get("month"))
+def _mp_common_data(year, month):
+    """Shared data-loading logic for the MP spreadsheet view and export."""
     employees = _active_employees()
-
-    layout, _ = ManagingPartnerLayout.objects.get_or_create(
-        year=year, month=month,
-        defaults={"employee_order": [], "client_order": []}
-    )
-
     uploads_by_user = {}
-    client_codes = set()
-    client_labels = {}
     for emp in employees:
         upload = _latest_upload_for_user(emp, year, month)
         if upload:
             uploads_by_user[emp.id] = upload
-            for half_key in ("first_half", "second_half"):
-                for line in upload.parsed_json.get("time", {}).get(half_key, {}).get("lines", []):
-                    if line.get("group") == "client" and line.get("charge_code"):
-                        code = line["charge_code"]
-                        client_codes.add(code)
-                        if code not in client_labels:
-                            client_labels[code] = line.get("label") or code
 
-    client_order = list(
-        ClientMapping.objects.filter(active=True).order_by("sort_order", "display_name")
-    )
-    client_order_codes = [c.code for c in client_order]
-    default_codes = [c for c in client_order_codes if c in client_codes and c and c != "0"]
-    default_codes += sorted(
-        [c for c in client_codes if c not in default_codes and c and c != "0"]
+    label_to_code = _mp_build_label_map(uploads_by_user)
+
+    layout, _ = ManagingPartnerLayout.objects.get_or_create(
+        year=year, month=month,
+        defaults={"employee_order": [], "client_order": []}
     )
 
     emp_map = {emp.id: emp for emp in employees}
@@ -1412,32 +1498,45 @@ def mp_spreadsheet(request):
         layout.employee_order = [emp.id for emp in employees_ordered]
 
     if layout.client_order:
-        ordered_codes = [c for c in layout.client_order if c in client_codes]
-        for code in default_codes:
-            if code not in ordered_codes:
-                ordered_codes.append(code)
+        seen = set(layout.client_order)
+        ordered_projects = list(layout.client_order)
+        for name in MP_CANONICAL_PROJECTS:
+            if name not in seen:
+                ordered_projects.append(name)
+                seen.add(name)
     else:
-        ordered_codes = default_codes
-        layout.client_order = ordered_codes
+        ordered_projects = list(MP_CANONICAL_PROJECTS)
+        layout.client_order = ordered_projects
 
     layout.save(update_fields=["employee_order", "client_order", "updated_at"])
 
+    project_active = _mp_project_active_map(ordered_projects, label_to_code, uploads_by_user)
+
     first_matrix = _build_mp_matrix(
-        employees_ordered, uploads_by_user, ordered_codes,
-        client_order, client_labels, "first_half",
+        employees_ordered, uploads_by_user, ordered_projects,
+        label_to_code, project_active, "first_half",
     )
     second_matrix = _build_mp_matrix(
-        employees_ordered, uploads_by_user, ordered_codes,
-        client_order, client_labels, "second_half",
+        employees_ordered, uploads_by_user, ordered_projects,
+        label_to_code, project_active, "second_half",
     )
+    return employees_ordered, first_matrix, second_matrix
 
-    month_options = (
+
+@login_required
+@managing_partner_only_required
+def mp_spreadsheet(request):
+    """Managing Partner spreadsheet view replicating the Excel layout."""
+    year, month = _parse_month_param(request.GET.get("month"))
+    employees_ordered, first_matrix, second_matrix = _mp_common_data(year, month)
+
+    raw_months = (
         TimesheetUpload.objects.values_list("year", "month")
         .distinct()
         .order_by("-year", "-month")[:12]
     )
-    if (year, month) not in month_options:
-        month_options = [(year, month)] + list(month_options)
+    if (year, month) not in raw_months:
+        raw_months = [(year, month)] + list(raw_months)
 
     from django.urls import reverse
     export_url = reverse("reviews:mp_export_xlsx", args=[year, month])
@@ -1446,7 +1545,7 @@ def mp_spreadsheet(request):
         "employees": employees_ordered,
         "month_label": _month_label(year, month),
         "month_param": f"{year}-{month:02d}",
-        "month_options": month_options,
+        "month_options": _month_options(raw_months, year, month),
         "first_matrix": first_matrix,
         "second_matrix": second_matrix,
         "export_url": export_url,
@@ -1494,65 +1593,7 @@ def mp_export_xlsx(request, year, month):
     if not HAS_OPENPYXL:
         return HttpResponse("openpyxl not installed", status=500)
 
-    employees = _active_employees()
-
-    layout, _ = ManagingPartnerLayout.objects.get_or_create(
-        year=year, month=month,
-        defaults={"employee_order": [], "client_order": []}
-    )
-
-    uploads_by_user = {}
-    client_codes = set()
-    client_labels_map = {}
-    for emp in employees:
-        upload = _latest_upload_for_user(emp, year, month)
-        if upload:
-            uploads_by_user[emp.id] = upload
-            for half_key in ("first_half", "second_half"):
-                for line in upload.parsed_json.get("time", {}).get(half_key, {}).get("lines", []):
-                    if line.get("group") == "client" and line.get("charge_code"):
-                        code = line["charge_code"]
-                        client_codes.add(code)
-                        if code not in client_labels_map:
-                            client_labels_map[code] = line.get("label") or code
-
-    client_order_objs = list(
-        ClientMapping.objects.filter(active=True).order_by("sort_order", "display_name")
-    )
-    client_order_codes = [c.code for c in client_order_objs]
-    default_codes = [c for c in client_order_codes if c in client_codes and c and c != "0"]
-    default_codes += sorted(
-        [c for c in client_codes if c not in default_codes and c and c != "0"]
-    )
-
-    emp_map = {emp.id: emp for emp in employees}
-    active_ids = set(emp_map.keys())
-
-    if layout.employee_order:
-        ordered_ids = [eid for eid in layout.employee_order if eid in active_ids]
-        for emp in employees:
-            if emp.id not in ordered_ids:
-                ordered_ids.append(emp.id)
-        employees_ordered = [emp_map[eid] for eid in ordered_ids if eid in emp_map]
-    else:
-        employees_ordered = list(employees)
-
-    if layout.client_order:
-        ordered_codes = [c for c in layout.client_order if c in client_codes]
-        for code in default_codes:
-            if code not in ordered_codes:
-                ordered_codes.append(code)
-    else:
-        ordered_codes = default_codes
-
-    first_matrix = _build_mp_matrix(
-        employees_ordered, uploads_by_user, ordered_codes,
-        client_order_objs, client_labels_map, "first_half",
-    )
-    second_matrix = _build_mp_matrix(
-        employees_ordered, uploads_by_user, ordered_codes,
-        client_order_objs, client_labels_map, "second_half",
-    )
+    employees_ordered, first_matrix, second_matrix = _mp_common_data(year, month)
 
     wb = Workbook()
     ws = wb.active
@@ -1661,13 +1702,13 @@ def mp_export_xlsx(request, year, month):
 def payroll_dashboard(request):
     """Partner dashboard."""
     year, month = _parse_month_param(request.GET.get("month"))
-    months = (
+    raw_months = (
         TimesheetUpload.objects.values_list("year", "month")
         .distinct()
         .order_by("-year", "-month")[:6]
     )
-    if (year, month) not in months:
-        months = [(year, month)] + list(months)
+    if (year, month) not in raw_months:
+        raw_months = [(year, month)] + list(raw_months)
 
     employees = _active_employees()
     expense_summary = []
@@ -1692,7 +1733,7 @@ def payroll_dashboard(request):
     report_count = sum(1 for item in expense_summary if item.get("upload"))
 
     context = {
-        "month_options": months,
+        "month_options": _month_options(raw_months, year, month),
         "selected_month": f"{year}-{month:02d}",
         "selected_month_label": _month_label(year, month),
         "expense_summary": expense_summary,

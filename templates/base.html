@@ -766,6 +766,24 @@
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+    <script>
+    (function() {
+        var msgs = document.querySelectorAll(".alert-success");
+        for (var i = 0; i < msgs.length; i++) {
+            if (msgs[i].textContent.indexOf("submitted successfully") !== -1) {
+                var duration = 2500;
+                var end = Date.now() + duration;
+                (function frame() {
+                    confetti({ particleCount: 3, angle: 60, spread: 55, origin: { x: 0 } });
+                    confetti({ particleCount: 3, angle: 120, spread: 55, origin: { x: 1 } });
+                    if (Date.now() < end) requestAnimationFrame(frame);
+                })();
+                break;
+            }
+        }
+    })();
+    </script>
 
     {% block extra_js %}{% endblock %}
 </body>

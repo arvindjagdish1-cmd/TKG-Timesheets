@@ -49,10 +49,6 @@
     .weekend {
         background: var(--ks-bg-secondary) !important;
     }
-    .incomplete {
-        background: var(--ks-warning-subtle) !important;
-        color: var(--ks-warning) !important;
-    }
     .missing-ts {
         background: var(--ks-danger-subtle) !important;
         color: var(--ks-danger) !important;
@@ -103,12 +99,10 @@
             <div class="col-md-4">
                 <label class="form-label">Month</label>
                 <select name="month" class="form-select">
-                    {% for year, month in month_options %}
-                    {% with value=year|stringformat:"04d"|add:"-"|add:month|stringformat:"02d" %}
-                    <option value="{{ value }}" {% if value == month_param %}selected{% endif %}>
-                        {{ year }}-{{ month|stringformat:"02d" }}
+                    {% for opt in month_options %}
+                    <option value="{{ opt.value }}" {% if opt.selected %}selected{% endif %}>
+                        {{ opt.label }}
                     </option>
-                    {% endwith %}
                     {% endfor %}
                 </select>
             </div>
@@ -120,11 +114,10 @@
 </div>
 
 <div class="card mb-3">
-    <div class="card-body py-2 d-flex gap-4 flex-wrap align-items-center" style="font-size: 0.75rem;">
-        <span><span class="d-inline-block" style="width:14px;height:14px;background:var(--ks-warning-subtle);border:1px solid var(--ks-warning);vertical-align:middle;"></span> &lt; 8 hrs on weekday</span>
-        <span><span class="d-inline-block" style="width:14px;height:14px;background:var(--ks-danger-subtle);border:1px solid var(--ks-danger);vertical-align:middle;"></span> 10+ hrs for 3+ days/week</span>
-        <span><span class="d-inline-block" style="width:14px;height:14px;border:2px solid var(--ks-warning);vertical-align:middle;"></span> Weekly total &lt; 35 or &gt; 55 hrs</span>
-        <span><span class="d-inline-block" style="width:14px;height:14px;background:var(--ks-danger-subtle);vertical-align:middle;"></span> Missing timesheet</span>
+    <div class="card-body py-2 d-flex gap-4 flex-wrap align-items-center" style="font-size: 0.8125rem; color: var(--ks-text-secondary);">
+        <span><span class="d-inline-block" style="width:14px;height:14px;background:var(--ks-danger-subtle);border:1px solid var(--ks-danger);vertical-align:middle;border-radius:2px;"></span> Missing timesheet</span>
+        <span><span class="d-inline-block" style="width:14px;height:14px;background:var(--ks-danger-subtle);border:1px solid var(--ks-danger);vertical-align:middle;border-radius:2px;"></span> 10+ hrs for 3+ days/week</span>
+        <span><span class="d-inline-block" style="width:14px;height:14px;border:2px solid var(--ks-warning);vertical-align:middle;border-radius:2px;"></span> Weekly total &lt; 35 or &gt; 55 hrs</span>
     </div>
 </div>
 
@@ -153,7 +146,7 @@
                         </td>
                         {% for date in first_dates %}
                         {% with value=row.daily_totals|get_item:date %}
-                        <td class="{% if date.weekday >= 5 %}weekend{% elif row.missing %}missing-ts{% elif date in row.flags.high_hours %}high-hours{% elif date in row.flags.incomplete %}incomplete{% endif %}{% if date in row.flags.weekly_hours_flag %} weekly-hours-flag{% endif %}">
+                        <td class="{% if date.weekday >= 5 %}weekend{% elif row.missing %}missing-ts{% elif date in row.flags.high_hours %}high-hours{% endif %}{% if date in row.flags.weekly_hours_flag %} weekly-hours-flag{% endif %}">
                             {% if value is not None %}{{ value|floatformat:1 }}{% else %}-{% endif %}
                         </td>
                         {% endwith %}
@@ -192,7 +185,7 @@
                         </td>
                         {% for date in second_dates %}
                         {% with value=row.daily_totals|get_item:date %}
-                        <td class="{% if date.weekday >= 5 %}weekend{% elif row.missing %}missing-ts{% elif date in row.flags.high_hours %}high-hours{% elif date in row.flags.incomplete %}incomplete{% endif %}{% if date in row.flags.weekly_hours_flag %} weekly-hours-flag{% endif %}">
+                        <td class="{% if date.weekday >= 5 %}weekend{% elif row.missing %}missing-ts{% elif date in row.flags.high_hours %}high-hours{% endif %}{% if date in row.flags.weekly_hours_flag %} weekly-hours-flag{% endif %}">
                             {% if value is not None %}{{ value|floatformat:1 }}{% else %}-{% endif %}
                         </td>
                         {% endwith %}

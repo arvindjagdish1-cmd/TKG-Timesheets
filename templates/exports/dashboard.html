@@ -78,7 +78,7 @@
 <div class="page-header">
     <div>
         <h1><i class="bi bi-file-earmark-arrow-down me-2" style="opacity: 0.7;"></i>Export Dashboard</h1>
-        <p class="text-muted mb-0">Generate XLSX and PDF exports for timesheets and expenses</p>
+        <p class="text-muted mb-0">Generate XLSX exports for timesheets and expenses</p>
     </div>
     <a href="{% url 'reviews:payroll_dashboard' %}" class="btn btn-secondary">
         <i class="bi bi-cash-coin me-2"></i>Payroll Export
@@ -100,41 +100,18 @@
                 <form action="{% url 'exports:generate_timesheets' %}" method="post">
                     {% csrf_token %}
                     <div class="mb-3">
-                        <label class="form-label">Select Range</label>
-                        <select name="range_type" class="form-select js-range-select" data-target="timesheet-range">
-                            <option value="current_month">Full Current Month</option>
-                            <option value="ytd">Full Year-to-Date</option>
-                            <option value="custom">Custom Range</option>
+                        <label class="form-label">Select Month</label>
+                        <select name="month" class="form-select js-ts-month" required>
+                            <option value="">— Choose a month —</option>
+                            {% for y, m in ts_months %}
+                            <option value="{{ m }}" data-year="{{ y }}">{{ y }}-{{ m|stringformat:"02d" }}</option>
+                            {% endfor %}
                         </select>
+                        <input type="hidden" name="year" class="js-ts-year" value="">
                     </div>
-                    <div class="mb-3 custom-range" id="timesheet-range" style="display: none;">
-                        <label class="form-label">Custom Period Range</label>
-                        <div class="row g-2">
-                            <div class="col-md-6">
-                                <select name="start_period_id" class="form-select">
-                                    {% for period in recent_ts_periods %}
-                                    <option value="{{ period.pk }}">{{ period.display_name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-6">
-                                <select name="end_period_id" class="form-select">
-                                    {% for period in recent_ts_periods %}
-                                    <option value="{{ period.pk }}">{{ period.display_name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Export Format</label>
-                        <select name="export_type" class="form-select">
-                            <option value="xlsx">Excel Only (.xlsx)</option>
-                            <option value="pdf">Excel + PDF</option>
-                            <option value="pack">Excel + PDF + Combined PDF Pack</option>
-                            <option value="all">All Formats</option>
-                        </select>
-                    </div>
+                    <p class="text-muted small mb-3">
+                        Exports all submitted &amp; approved timesheets for the selected month.
+                    </p>
                     <button type="submit" class="btn btn-primary btn-lg w-100">
                         <i class="bi bi-download me-2"></i>Generate Timesheets
                     </button>
@@ -157,48 +134,18 @@
                 <form action="{% url 'exports:generate_expenses' %}" method="post">
                     {% csrf_token %}
                     <div class="mb-3">
-                        <label class="form-label">Select Range</label>
-                        <select name="range_type" class="form-select js-range-select" data-target="expense-range">
-                            <option value="current_month">Full Current Month</option>
-                            <option value="ytd">Full Year-to-Date</option>
-                            <option value="custom">Custom Range</option>
+                        <label class="form-label">Select Month</label>
+                        <select name="month" class="form-select js-exp-month" required>
+                            <option value="">— Choose a month —</option>
+                            {% for em in expense_months %}
+                            <option value="{{ em.month }}" data-year="{{ em.year }}">{{ em.display_name }}</option>
+                            {% endfor %}
                         </select>
+                        <input type="hidden" name="year" class="js-exp-year" value="">
                     </div>
-                    <div class="mb-3 custom-range" id="expense-range" style="display: none;">
-                        <label class="form-label">Custom Month Range</label>
-                        <div class="row g-2">
-                            <div class="col-md-6">
-                                <select name="start_month_id" class="form-select">
-                                    {% for month in recent_expense_months %}
-                                    <option value="{{ month.pk }}">{{ month.display_name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-6">
-                                <select name="end_month_id" class="form-select">
-                                    {% for month in recent_expense_months %}
-                                    <option value="{{ month.pk }}">{{ month.display_name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Export Format</label>
-                        <select name="export_type" class="form-select">
-                            <option value="xlsx">Excel Only (.xlsx)</option>
-                            <option value="pdf">Excel + PDF</option>
-                            <option value="pack">Excel + PDF + Combined PDF Pack</option>
-                            <option value="all">All Formats</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Sort Order</label>
-                        <select name="sort_by" class="form-select">
-                            <option value="seniority">By Seniority</option>
-                            <option value="alpha">Alphabetical</option>
-                        </select>
-                    </div>
+                    <p class="text-muted small mb-3">
+                        Exports all submitted &amp; approved expense reports for the selected month.
+                    </p>
                     <button type="submit" class="btn btn-success btn-lg w-100">
                         <i class="bi bi-download me-2"></i>Generate Expenses
                     </button>
@@ -282,15 +229,17 @@
 
 {% block extra_js %}
 <script>
-    document.querySelectorAll(".js-range-select").forEach((select) => {
-        const targetId = select.dataset.target;
-        const target = document.getElementById(targetId);
-        const toggle = () => {
-            if (!target) return;
-            target.style.display = select.value === "custom" ? "block" : "none";
-        };
-        select.addEventListener("change", toggle);
-        toggle();
+document.querySelectorAll(".js-ts-month").forEach(function(sel) {
+    sel.addEventListener("change", function() {
+        var opt = sel.options[sel.selectedIndex];
+        sel.closest("form").querySelector(".js-ts-year").value = opt.dataset.year || "";
     });
+});
+document.querySelectorAll(".js-exp-month").forEach(function(sel) {
+    sel.addEventListener("change", function() {
+        var opt = sel.options[sel.selectedIndex];
+        sel.closest("form").querySelector(".js-exp-year").value = opt.dataset.year || "";
+    });
+});
 </script>
 {% endblock %}
