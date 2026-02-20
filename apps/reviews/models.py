@@ -108,7 +108,10 @@ class ManagingPartnerLayout(models.Model):
     employee_order = models.JSONField(
         default=list,
         blank=True,
-        help_text="Ordered list of User PKs for column ordering.",
+        help_text=(
+            "Ordered list of column identifiers. "
+            "Integers are User PKs; strings like 'ph_3' are PlannedHire PKs."
+        ),
     )
     client_order = models.JSONField(
         default=list,
@@ -130,3 +133,39 @@ class ManagingPartnerLayout(models.Model):
 
     def __str__(self):
         return f"MP Layout {self.year}-{self.month:02d}"
+
+
+class PlannedHire(models.Model):
+    """
+    A placeholder column in the Managing Partner spreadsheet
+    representing a future hire that hasn't started yet.
+    """
+
+    display_name = models.CharField(
+        max_length=150,
+        help_text='Label shown in the column header, e.g. "Jr. Experienced Hire".',
+    )
+    active = models.BooleanField(
+        default=True,
+        help_text="Inactive planned hires are hidden from the spreadsheet.",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["display_name"]
+        verbose_name = "planned hire"
+        verbose_name_plural = "planned hires"
+
+    def __str__(self):
+        return self.display_name
+
+    @property
+    def column_key(self):
+        """Identifier used in ManagingPartnerLayout.employee_order."""
+        return f"ph_{self.pk}"

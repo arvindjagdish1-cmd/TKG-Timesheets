@@ -34,7 +34,7 @@ from apps.timesheets.models import Timesheet, TimesheetLine, TimeEntry, ChargeCo
 from apps.expenses.models import ExpenseReport, ExpenseCategory, ExpenseItem
 from apps.periods.models import TimesheetPeriod, ExpenseMonth
 from apps.accounts.models import User, EmployeeProfile
-from .models import ReviewAction, ReviewComment, ManagingPartnerLayout
+from .models import ReviewAction, ReviewComment, ManagingPartnerLayout, PlannedHire
 
 
 def _parse_month_param(value):
@@ -1358,7 +1358,39 @@ def _mp_project_active_map(ordered_projects, label_to_code, uploads_by_user):
     return active_map
 
 
-def _build_mp_matrix(employees_ordered, uploads_by_user, ordered_projects,
+class _MPColumn:
+    """Lightweight column descriptor for the MP spreadsheet template."""
+    __slots__ = ("id", "initials", "full_name", "is_planned")
+
+    def __init__(self, *, key, initials, full_name, is_planned=False):
+        self.id = key
+        self.initials = initials
+        self.full_name = full_name
+        self.is_planned = is_planned
+
+
+def _build_mp_columns(employees_ordered, planned_hires):
+    """Build a list of _MPColumn from real employees and planned hires."""
+    columns = []
+    for emp in employees_ordered:
+        prof = emp.profile_or_none
+        initials = prof.initials if prof else emp.first_name[:3]
+        columns.append(_MPColumn(
+            key=emp.id,
+            initials=initials or emp.first_name[:3],
+            full_name=emp.get_full_name() or emp.email,
+        ))
+    for ph in planned_hires:
+        columns.append(_MPColumn(
+            key=ph.column_key,
+            initials=ph.display_name[:6],
+            full_name=ph.display_name,
+            is_planned=True,
+        ))
+    return columns
+
+
+def _build_mp_matrix(columns, uploads_by_user, ordered_projects,
                      label_to_code, project_active, half_key):
     """Build the matrix for one half of the Managing Partner spreadsheet."""
     marketing_rows_def = [
@@ -1385,10 +1417,11 @@ def _build_mp_matrix(employees_ordered, uploads_by_user, ordered_projects,
         ("Other Paid Time Off", "HOL+OFF"),
     ]
 
+    col_keys = [c.id for c in columns]
     matrix = []
-    chargeable_totals = {emp.id: Decimal("0") for emp in employees_ordered}
-    marketing_totals = {emp.id: Decimal("0") for emp in employees_ordered}
-    other_totals = {emp.id: Decimal("0") for emp in employees_ordered}
+    chargeable_totals = {k: Decimal("0") for k in col_keys}
+    marketing_totals = {k: Decimal("0") for k in col_keys}
+    other_totals = {k: Decimal("0") for k in col_keys}
 
     for project_name in ordered_projects:
         code = label_to_code.get(project_name)
@@ -1396,15 +1429,18 @@ def _build_mp_matrix(employees_ordered, uploads_by_user, ordered_projects,
         row = {"label": project_name, "code": code or "", "group": "client",
                "active": "Active" if is_active else "Inactive", "values": {}}
         total = Decimal("0")
-        for emp in employees_ordered:
-            upload = uploads_by_user.get(emp.id)
+        for col in columns:
+            if col.is_planned:
+                row["values"][col.id] = Decimal("0")
+                continue
+            upload = uploads_by_user.get(col.id)
             hours = Decimal("0")
             if upload and code:
                 hours = Decimal(str(upload.parsed_json.get("time", {}).get(
                     half_key, {}).get("totals_by_client_code", {}).get(code, 0)))
-            row["values"][emp.id] = hours
+            row["values"][col.id] = hours
             total += hours
-            chargeable_totals[emp.id] += hours
+            chargeable_totals[col.id] += hours
         row["total"] = total
         matrix.append(row)
 
@@ -1416,15 +1452,18 @@ def _build_mp_matrix(employees_ordered, uploads_by_user, ordered_projects,
     for label, code in marketing_rows_def:
         row = {"label": label, "code": code, "group": "marketing", "values": {}}
         total = Decimal("0")
-        for emp in employees_ordered:
-            upload = uploads_by_user.get(emp.id)
+        for col in columns:
+            if col.is_planned:
+                row["values"][col.id] = Decimal("0")
+                continue
+            upload = uploads_by_user.get(col.id)
             hours = Decimal("0")
             if upload:
                 hours = Decimal(str(upload.parsed_json.get("time", {}).get(
                     half_key, {}).get("totals_by_marketing_bucket", {}).get(code, 0)))
-            row["values"][emp.id] = hours
+            row["values"][col.id] = hours
             total += hours
-            marketing_totals[emp.id] += hours
+            marketing_totals[col.id] += hours
         row["total"] = total
         matrix.append(row)
 
@@ -1436,8 +1475,11 @@ def _build_mp_matrix(employees_ordered, uploads_by_user, ordered_projects,
     for label, code in other_rows_def:
         row = {"label": label, "code": code, "group": "other", "values": {}}
         total = Decimal("0")
-        for emp in employees_ordered:
-            upload = uploads_by_user.get(emp.id)
+        for col in columns:
+            if col.is_planned:
+                row["values"][col.id] = Decimal("0")
+                continue
+            upload = uploads_by_user.get(col.id)
             hours = Decimal("0")
             if upload:
                 other_totals_data = upload.parsed_json.get("time", {}).get(
@@ -1447,9 +1489,9 @@ def _build_mp_matrix(employees_ordered, uploads_by_user, ordered_projects,
                              + Decimal(str(other_totals_data.get("OFF", 0))))
                 else:
                     hours = Decimal(str(other_totals_data.get(code, 0)))
-            row["values"][emp.id] = hours
+            row["values"][col.id] = hours
             total += hours
-            other_totals[emp.id] += hours
+            other_totals[col.id] += hours
         row["total"] = total
         matrix.append(row)
 
@@ -1458,8 +1500,8 @@ def _build_mp_matrix(employees_ordered, uploads_by_user, ordered_projects,
         "values": dict(other_totals), "total": sum(other_totals.values()),
     })
 
-    grand = {eid: chargeable_totals[eid] + marketing_totals[eid] + other_totals[eid]
-             for eid in chargeable_totals}
+    grand = {k: chargeable_totals[k] + marketing_totals[k] + other_totals[k]
+             for k in col_keys}
     matrix.append({
         "label": "Total Hours", "group": "grand_total",
         "values": grand, "total": sum(grand.values()),
@@ -1486,16 +1528,58 @@ def _mp_common_data(year, month):
 
     emp_map = {emp.id: emp for emp in employees}
     active_ids = set(emp_map.keys())
+    planned_hires = list(PlannedHire.objects.filter(active=True))
+    ph_map = {ph.column_key: ph for ph in planned_hires}
+    ph_keys = set(ph_map.keys())
 
     if layout.employee_order:
-        ordered_ids = [eid for eid in layout.employee_order if eid in active_ids]
+        combined_order = []
+        seen_keys = set()
+        for entry in layout.employee_order:
+            if isinstance(entry, str) and entry.startswith("ph_"):
+                if entry in ph_keys and entry not in seen_keys:
+                    combined_order.append(("ph", ph_map[entry]))
+                    seen_keys.add(entry)
+            else:
+                eid = int(entry) if not isinstance(entry, int) else entry
+                if eid in active_ids and eid not in seen_keys:
+                    combined_order.append(("emp", emp_map[eid]))
+                    seen_keys.add(eid)
         for emp in employees:
-            if emp.id not in ordered_ids:
-                ordered_ids.append(emp.id)
-        employees_ordered = [emp_map[eid] for eid in ordered_ids if eid in emp_map]
+            if emp.id not in seen_keys:
+                combined_order.append(("emp", emp))
+        for ph in planned_hires:
+            if ph.column_key not in seen_keys:
+                combined_order.append(("ph", ph))
+
+        columns = []
+        employees_ordered = []
+        planned_ordered = []
+        for kind, obj in combined_order:
+            if kind == "emp":
+                employees_ordered.append(obj)
+                prof = obj.profile_or_none
+                initials = prof.initials if prof else obj.first_name[:3]
+                columns.append(_MPColumn(
+                    key=obj.id,
+                    initials=initials or obj.first_name[:3],
+                    full_name=obj.get_full_name() or obj.email,
+                ))
+            else:
+                planned_ordered.append(obj)
+                columns.append(_MPColumn(
+                    key=obj.column_key,
+                    initials=obj.display_name[:6],
+                    full_name=obj.display_name,
+                    is_planned=True,
+                ))
     else:
         employees_ordered = list(employees)
-        layout.employee_order = [emp.id for emp in employees_ordered]
+        planned_ordered = list(planned_hires)
+        columns = _build_mp_columns(employees_ordered, planned_ordered)
+        layout.employee_order = [emp.id for emp in employees_ordered] + [
+            ph.column_key for ph in planned_ordered
+        ]
 
     if layout.client_order:
         seen = set(layout.client_order)
@@ -1513,14 +1597,14 @@ def _mp_common_data(year, month):
     project_active = _mp_project_active_map(ordered_projects, label_to_code, uploads_by_user)
 
     first_matrix = _build_mp_matrix(
-        employees_ordered, uploads_by_user, ordered_projects,
+        columns, uploads_by_user, ordered_projects,
         label_to_code, project_active, "first_half",
     )
     second_matrix = _build_mp_matrix(
-        employees_ordered, uploads_by_user, ordered_projects,
+        columns, uploads_by_user, ordered_projects,
         label_to_code, project_active, "second_half",
     )
-    return employees_ordered, first_matrix, second_matrix
+    return columns, employees_ordered, planned_ordered, first_matrix, second_matrix
 
 
 @login_required
@@ -1528,7 +1612,9 @@ def _mp_common_data(year, month):
 def mp_spreadsheet(request):
     """Managing Partner spreadsheet view replicating the Excel layout."""
     year, month = _parse_month_param(request.GET.get("month"))
-    employees_ordered, first_matrix, second_matrix = _mp_common_data(year, month)
+    columns, employees_ordered, planned_ordered, first_matrix, second_matrix = (
+        _mp_common_data(year, month)
+    )
 
     raw_months = (
         TimesheetUpload.objects.values_list("year", "month")
@@ -1542,7 +1628,9 @@ def mp_spreadsheet(request):
     export_url = reverse("reviews:mp_export_xlsx", args=[year, month])
 
     context = {
+        "columns": columns,
         "employees": employees_ordered,
+        "planned_hires": planned_ordered,
         "month_label": _month_label(year, month),
         "month_param": f"{year}-{month:02d}",
         "month_options": _month_options(raw_months, year, month),
@@ -1577,7 +1665,13 @@ def mp_reorder(request):
     )
 
     if field == "employee_order":
-        layout.employee_order = [int(x) for x in order]
+        parsed = []
+        for x in order:
+            if isinstance(x, str) and x.startswith("ph_"):
+                parsed.append(x)
+            else:
+                parsed.append(int(x))
+        layout.employee_order = parsed
     else:
         layout.client_order = list(order)
 
@@ -1588,12 +1682,47 @@ def mp_reorder(request):
 
 @login_required
 @managing_partner_only_required
+@require_POST
+def mp_add_planned_hire(request):
+    """AJAX endpoint to create a new planned-hire column."""
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    name = (data.get("name") or "").strip()
+    if not name:
+        return JsonResponse({"error": "Name is required"}, status=400)
+
+    ph = PlannedHire.objects.create(display_name=name, created_by=request.user)
+    return JsonResponse({"ok": True, "id": ph.pk, "column_key": ph.column_key, "name": ph.display_name})
+
+
+@login_required
+@managing_partner_only_required
+@require_POST
+def mp_delete_planned_hire(request, pk):
+    """AJAX endpoint to remove a planned-hire column."""
+    ph = get_object_or_404(PlannedHire, pk=pk)
+    col_key = ph.column_key
+    ph.delete()
+    for layout in ManagingPartnerLayout.objects.all():
+        if col_key in layout.employee_order:
+            layout.employee_order = [e for e in layout.employee_order if e != col_key]
+            layout.save(update_fields=["employee_order", "updated_at"])
+    return JsonResponse({"ok": True})
+
+
+@login_required
+@managing_partner_only_required
 def mp_export_xlsx(request, year, month):
     """Export the Managing Partner spreadsheet as Excel, respecting custom ordering."""
     if not HAS_OPENPYXL:
         return HttpResponse("openpyxl not installed", status=500)
 
-    employees_ordered, first_matrix, second_matrix = _mp_common_data(year, month)
+    columns, employees_ordered, planned_ordered, first_matrix, second_matrix = (
+        _mp_common_data(year, month)
+    )
 
     wb = Workbook()
     ws = wb.active
@@ -1606,20 +1735,17 @@ def mp_export_xlsx(request, year, month):
 
     ws.cell(row=1, column=1, value="Time Collection").font = Font(bold=True, size=14)
 
-    emp_initials = []
-    for emp in employees_ordered:
-        initials = emp.profile_or_none.initials if emp.profile_or_none else emp.first_name[:2].upper()
-        emp_initials.append(initials or emp.first_name[:2].upper())
+    col_headers = [col.initials for col in columns]
 
     ws.cell(row=3, column=2, value="Active / Inactive").font = header_font
     ws.cell(row=3, column=2).fill = header_fill
-    for ci, init in enumerate(emp_initials, 3):
-        cell = ws.cell(row=3, column=ci, value=init)
+    for ci, header in enumerate(col_headers, 3):
+        cell = ws.cell(row=3, column=ci, value=header)
         cell.font = header_font
         cell.fill = header_fill
         cell.alignment = Alignment(horizontal="center")
-    ws.cell(row=3, column=len(emp_initials) + 3, value="Total").font = header_font
-    ws.cell(row=3, column=len(emp_initials) + 3).fill = header_fill
+    ws.cell(row=3, column=len(col_headers) + 3, value="Total").font = header_font
+    ws.cell(row=3, column=len(col_headers) + 3).fill = header_fill
 
     def write_half(start_row, matrix, half_label):
         row_idx = start_row
@@ -1653,8 +1779,8 @@ def mp_export_xlsx(request, year, month):
             if group == "client":
                 ws.cell(row=row_idx, column=2, value=entry.get("active", "Active"))
 
-            for ci, emp in enumerate(employees_ordered, 3):
-                val = float(entry["values"].get(emp.id, 0))
+            for ci, col in enumerate(columns, 3):
+                val = float(entry["values"].get(col.id, 0))
                 cell = ws.cell(row=row_idx, column=ci, value=val if val else None)
                 cell.alignment = Alignment(horizontal="center")
                 if is_total:
@@ -1662,7 +1788,7 @@ def mp_export_xlsx(request, year, month):
 
             total_val = float(entry.get("total", 0))
             total_cell = ws.cell(
-                row=row_idx, column=len(employees_ordered) + 3,
+                row=row_idx, column=len(columns) + 3,
                 value=total_val if total_val else None,
             )
             if is_total:
@@ -1678,7 +1804,7 @@ def mp_export_xlsx(request, year, month):
 
     ws.column_dimensions["A"].width = 30
     ws.column_dimensions["B"].width = 16
-    for ci in range(3, len(employees_ordered) + 4):
+    for ci in range(3, len(columns) + 4):
         ws.column_dimensions[get_column_letter(ci)].width = 8
 
     buffer = BytesIO()

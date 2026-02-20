@@ -12,13 +12,9 @@
                     <tr>
                         <th class="project-header" style="min-width: 240px;">Project</th>
                         <th class="status-header" style="min-width: 80px;">Status</th>
-                        {% for emp in employees %}
-                        <th class="emp-header" title="{{ emp.get_full_name|default:emp.email }}">
-                            {% if emp.profile_or_none %}
-                                {{ emp.profile_or_none.initials|default:emp.first_name|truncatechars:3 }}
-                            {% else %}
-                                {{ emp.first_name|truncatechars:3 }}
-                            {% endif %}
+                        {% for col in columns %}
+                        <th class="emp-header{% if col.is_planned %} planned-col{% endif %}" title="{{ col.full_name }}">
+                            {{ col.initials }}
                         </th>
                         {% endfor %}
                         <th class="total-col">Total</th>
@@ -28,7 +24,7 @@
                 <!-- Client Work Section -->
                 <tbody>
                     <tr class="section-header-row">
-                        <td colspan="{{ employees|length|add:3 }}">Client Work</td>
+                        <td colspan="{{ columns|length|add:3 }}">Client Work</td>
                     </tr>
                 </tbody>
                 <tbody class="client-sortable" id="clients-{{ table_id }}">
@@ -39,8 +35,8 @@
                             <i class="bi bi-grip-vertical text-muted me-1" style="font-size:0.6rem;"></i>{{ row.label }}
                         </td>
                         <td class="status-cell {% if row.active == 'Inactive' %}text-danger{% endif %}">{{ row.active|default:"Active" }}</td>
-                        {% for emp in employees %}
-                        <td>{{ row.values|get_item:emp.id|zero_dash }}</td>
+                        {% for col in columns %}
+                        <td{% if col.is_planned %} class="planned-col"{% endif %}>{{ row.values|get_item:col.id|zero_dash }}</td>
                         {% endfor %}
                         <td class="total-col">{{ row.total|zero_dash }}</td>
                     </tr>
@@ -55,8 +51,8 @@
                     <tr class="total-row">
                         <td class="project-cell" style="cursor:default;">{{ row.label }}</td>
                         <td class="status-cell"></td>
-                        {% for emp in employees %}
-                        <td>{{ row.values|get_item:emp.id|zero_dash }}</td>
+                        {% for col in columns %}
+                        <td{% if col.is_planned %} class="planned-col"{% endif %}>{{ row.values|get_item:col.id|zero_dash }}</td>
                         {% endfor %}
                         <td class="total-col">{{ row.total|zero_dash }}</td>
                     </tr>
@@ -67,15 +63,15 @@
                 <!-- Marketing Section -->
                 <tbody>
                     <tr class="section-header-row">
-                        <td colspan="{{ employees|length|add:3 }}">Marketing</td>
+                        <td colspan="{{ columns|length|add:3 }}">Marketing</td>
                     </tr>
                     {% for row in matrix %}
                     {% if row.group == "marketing" %}
                     <tr class="non-draggable">
                         <td class="project-cell" style="cursor:default;">{{ row.label }}</td>
                         <td class="status-cell"></td>
-                        {% for emp in employees %}
-                        <td>{{ row.values|get_item:emp.id|zero_dash }}</td>
+                        {% for col in columns %}
+                        <td{% if col.is_planned %} class="planned-col"{% endif %}>{{ row.values|get_item:col.id|zero_dash }}</td>
                         {% endfor %}
                         <td class="total-col">{{ row.total|zero_dash }}</td>
                     </tr>
@@ -90,8 +86,8 @@
                     <tr class="total-row">
                         <td class="project-cell" style="cursor:default;">{{ row.label }}</td>
                         <td class="status-cell"></td>
-                        {% for emp in employees %}
-                        <td>{{ row.values|get_item:emp.id|zero_dash }}</td>
+                        {% for col in columns %}
+                        <td{% if col.is_planned %} class="planned-col"{% endif %}>{{ row.values|get_item:col.id|zero_dash }}</td>
                         {% endfor %}
                         <td class="total-col">{{ row.total|zero_dash }}</td>
                     </tr>
@@ -102,15 +98,15 @@
                 <!-- Other Hours Section -->
                 <tbody>
                     <tr class="section-header-row">
-                        <td colspan="{{ employees|length|add:3 }}">Other Hours</td>
+                        <td colspan="{{ columns|length|add:3 }}">Other Hours</td>
                     </tr>
                     {% for row in matrix %}
                     {% if row.group == "other" %}
                     <tr class="non-draggable">
                         <td class="project-cell" style="cursor:default;">{{ row.label }}</td>
                         <td class="status-cell"></td>
-                        {% for emp in employees %}
-                        <td>{{ row.values|get_item:emp.id|zero_dash }}</td>
+                        {% for col in columns %}
+                        <td{% if col.is_planned %} class="planned-col"{% endif %}>{{ row.values|get_item:col.id|zero_dash }}</td>
                         {% endfor %}
                         <td class="total-col">{{ row.total|zero_dash }}</td>
                     </tr>
@@ -125,8 +121,8 @@
                     <tr class="total-row">
                         <td class="project-cell" style="cursor:default;">{{ row.label }}</td>
                         <td class="status-cell"></td>
-                        {% for emp in employees %}
-                        <td>{{ row.values|get_item:emp.id|zero_dash }}</td>
+                        {% for col in columns %}
+                        <td{% if col.is_planned %} class="planned-col"{% endif %}>{{ row.values|get_item:col.id|zero_dash }}</td>
                         {% endfor %}
                         <td class="total-col">{{ row.total|zero_dash }}</td>
                     </tr>
@@ -141,8 +137,8 @@
                     <tr class="grand-total-row">
                         <td class="project-cell" style="cursor:default;">{{ row.label }}</td>
                         <td class="status-cell"></td>
-                        {% for emp in employees %}
-                        <td>{{ row.values|get_item:emp.id|zero_dash }}</td>
+                        {% for col in columns %}
+                        <td{% if col.is_planned %} class="planned-col"{% endif %}>{{ row.values|get_item:col.id|zero_dash }}</td>
                         {% endfor %}
                         <td class="total-col">{{ row.total|zero_dash }}</td>
                     </tr>

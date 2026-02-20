@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.contenttypes.admin import GenericTabularInline
 
-from .models import ReviewAction, ReviewComment
+from .models import ReviewAction, ReviewComment, PlannedHire
 
 
 @admin.register(ReviewAction)
@@ -46,3 +46,10 @@ class ReviewCommentInline(GenericTabularInline):
     fields = ("author", "text", "is_internal", "created_at")
     readonly_fields = ("author", "created_at")
     ordering = ("created_at",)
+
+
+@admin.register(PlannedHire)
+class PlannedHireAdmin(admin.ModelAdmin):
+    list_display = ("display_name", "active", "created_by", "created_at")
+    list_filter = ("active",)
+    search_fields = ("display_name",)

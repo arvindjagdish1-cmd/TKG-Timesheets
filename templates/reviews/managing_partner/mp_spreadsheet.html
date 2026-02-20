@@ -7,7 +7,8 @@
 <style>
     .mp-table {
         font-size: 0.75rem;
-        border-collapse: collapse;
+        border-collapse: separate;
+        border-spacing: 0;
     }
     .mp-table th, .mp-table td {
         border: 1px solid var(--ks-border-color, #dee2e6);
@@ -17,7 +18,7 @@
         white-space: nowrap;
         text-align: center;
         padding: 0.375rem 0.25rem;
-        background: var(--ks-bg-secondary);
+        background: var(--ks-bg-secondary, #1a1a1a);
         position: sticky;
         top: 0;
         z-index: 3;
@@ -26,6 +27,7 @@
         text-align: center;
         padding: 0.375rem 0.25rem;
         font-family: var(--font-mono);
+        background: var(--ks-bg-card, #1e1e1e);
     }
     .mp-table .project-cell {
         text-align: left;
@@ -34,8 +36,8 @@
         white-space: nowrap;
         position: sticky;
         left: 0;
-        background: var(--ks-bg-card);
-        z-index: 1;
+        background: var(--ks-bg-card, #1e1e1e);
+        z-index: 2;
         max-width: 240px;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -50,23 +52,23 @@
         white-space: nowrap;
         position: sticky;
         left: 240px;
-        background: var(--ks-bg-card);
-        z-index: 1;
+        background: var(--ks-bg-card, #1e1e1e);
+        z-index: 2;
     }
     .mp-table th.project-header {
         position: sticky;
         left: 0;
-        z-index: 4;
-        background: var(--ks-bg-secondary);
+        z-index: 5;
+        background: var(--ks-bg-secondary, #1a1a1a);
     }
     .mp-table th.status-header {
         position: sticky;
         left: 240px;
-        z-index: 4;
-        background: var(--ks-bg-secondary);
+        z-index: 5;
+        background: var(--ks-bg-secondary, #1a1a1a);
     }
     .section-header-row td {
-        background: var(--ks-bg-secondary) !important;
+        background: var(--ks-bg-secondary, #1a1a1a) !important;
         font-weight: 600 !important;
         font-size: 0.75rem !important;
         text-transform: uppercase;
@@ -76,8 +78,12 @@
     }
     .total-row td {
         font-weight: 700 !important;
-        background: var(--ks-bg-tertiary) !important;
+        background: var(--ks-bg-tertiary, #242424) !important;
         border-top: 2px solid var(--ks-border-color, #dee2e6) !important;
+    }
+    .total-row .project-cell,
+    .total-row .status-cell {
+        background: var(--ks-bg-tertiary, #242424) !important;
     }
     .grand-total-row td {
         font-weight: 700 !important;
@@ -85,9 +91,14 @@
         color: #fff !important;
         border-top: 3px double var(--ks-border-color, #dee2e6) !important;
     }
+    .grand-total-row .project-cell,
+    .grand-total-row .status-cell {
+        background: var(--ks-primary, #2563eb) !important;
+        color: #fff !important;
+    }
     .total-col {
         font-weight: 600;
-        background: var(--ks-bg-tertiary) !important;
+        background: var(--ks-bg-tertiary, #242424) !important;
     }
     .emp-header {
         min-width: 48px;
@@ -116,6 +127,17 @@
     tr.inactive-project td {
         opacity: 0.55;
     }
+    .planned-col {
+        background: var(--ks-bg-tertiary, #242424) !important;
+        font-style: italic;
+        opacity: 0.7;
+    }
+    th.planned-col {
+        opacity: 1;
+        background: var(--ks-bg-secondary, #1a1a1a) !important;
+        font-style: italic;
+        color: var(--ks-primary, #2563eb);
+    }
     #emp-sort-modal .list-group-item {
         cursor: grab;
         user-select: none;
@@ -125,6 +147,11 @@
     }
     #emp-sort-modal .sortable-ghost {
         background: var(--ks-primary-subtle, #dbeafe) !important;
+    }
+    .planned-badge {
+        font-size: 0.625rem;
+        padding: 0.15em 0.4em;
+        vertical-align: middle;
     }
 </style>
 {% endblock %}
@@ -143,7 +170,7 @@
     </div>
     <div class="d-flex gap-2">
         <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#emp-sort-modal">
-            <i class="bi bi-arrows-move me-2"></i>Reorder Employees
+            <i class="bi bi-arrows-move me-2"></i>Manage Columns
         </button>
         <a href="{{ export_url }}" class="btn btn-success">
             <i class="bi bi-file-earmark-excel me-2"></i>Export Excel
@@ -180,24 +207,44 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Reorder Employees</h5>
+                <h5 class="modal-title">Reorder Columns</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted small">Drag to reorder employee columns. Changes are saved automatically.</p>
+                <p class="text-muted small">Drag to reorder columns. Changes are saved automatically.</p>
                 <ul class="list-group" id="emp-sort-list">
-                    {% for emp in employees %}
-                    <li class="list-group-item d-flex align-items-center" data-emp-id="{{ emp.id }}">
-                        <i class="bi bi-grip-vertical me-2 text-muted"></i>
-                        <span>
-                            {% if emp.profile_or_none %}
-                                <strong>{{ emp.profile_or_none.initials|default:"--" }}</strong> &mdash;
-                            {% endif %}
-                            {{ emp.get_full_name|default:emp.email }}
-                        </span>
+                    {% for col in columns %}
+                    <li class="list-group-item d-flex align-items-center justify-content-between"
+                        data-emp-id="{{ col.id }}">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-grip-vertical me-2 text-muted"></i>
+                            <span>
+                                {% if col.is_planned %}
+                                    <span class="badge bg-info planned-badge me-1">Planned</span>
+                                {% endif %}
+                                <strong>{{ col.initials }}</strong> &mdash; {{ col.full_name }}
+                            </span>
+                        </div>
+                        {% if col.is_planned %}
+                        <button type="button" class="btn btn-sm btn-outline-danger ms-2 delete-planned-hire"
+                                data-ph-id="{{ col.id }}"
+                                title="Remove planned hire">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                        {% endif %}
                     </li>
                     {% endfor %}
                 </ul>
+
+                <hr>
+                <p class="text-muted small mb-2">Add a planned hire column:</p>
+                <div class="input-group">
+                    <input type="text" class="form-control form-control-sm" id="planned-hire-name"
+                           placeholder='e.g. "Jr. Experienced Hire"'>
+                    <button class="btn btn-sm btn-outline-primary" type="button" id="add-planned-hire">
+                        <i class="bi bi-plus-lg me-1"></i>Add
+                    </button>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-primary" id="save-emp-order" data-bs-dismiss="modal">
@@ -216,6 +263,7 @@
     const monthParam = "{{ month_param }}";
     const [yearStr, monthStr] = monthParam.split("-");
     const csrfToken = "{{ csrf_token }}";
+    const phDeleteBase = "{% url 'reviews:mp_delete_planned_hire' pk=0 %}".replace("/0/", "/");
 
     function sendReorder(field, order) {
         fetch("{% url 'reviews:mp_reorder' %}", {
@@ -230,6 +278,14 @@
                 field: field,
                 order: order,
             }),
+        });
+    }
+
+    function getColumnOrder() {
+        var items = empList.querySelectorAll("li[data-emp-id]");
+        return Array.from(items).map(function(li) {
+            var raw = li.dataset.empId;
+            return raw.startsWith("ph_") ? raw : parseInt(raw);
         });
     }
 
@@ -248,20 +304,90 @@
         });
     });
 
-    // Employee column reorder in modal
+    // Employee/planned-hire column reorder in modal
     var empList = document.getElementById("emp-sort-list");
     if (empList) {
         new Sortable(empList, {
             animation: 150,
             ghostClass: "sortable-ghost",
+            handle: ".bi-grip-vertical",
         });
     }
 
     document.getElementById("save-emp-order")?.addEventListener("click", function() {
-        var items = empList.querySelectorAll("li[data-emp-id]");
-        var order = Array.from(items).map(function(li) { return parseInt(li.dataset.empId); });
-        sendReorder("employee_order", order);
+        sendReorder("employee_order", getColumnOrder());
         setTimeout(function() { location.reload(); }, 300);
+    });
+
+    // Add planned hire
+    document.getElementById("add-planned-hire")?.addEventListener("click", function() {
+        var nameInput = document.getElementById("planned-hire-name");
+        var name = (nameInput.value || "").trim();
+        if (!name) return;
+        nameInput.disabled = true;
+        this.disabled = true;
+
+        fetch("{% url 'reviews:mp_add_planned_hire' %}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": csrfToken,
+            },
+            body: JSON.stringify({ name: name }),
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.ok) {
+                var li = document.createElement("li");
+                li.className = "list-group-item d-flex align-items-center justify-content-between";
+                li.dataset.empId = data.column_key;
+                li.innerHTML =
+                    '<div class="d-flex align-items-center">' +
+                        '<i class="bi bi-grip-vertical me-2 text-muted"></i>' +
+                        '<span><span class="badge bg-info planned-badge me-1">Planned</span>' +
+                        '<strong>' + data.name.substring(0, 6) + '</strong> &mdash; ' + data.name + '</span>' +
+                    '</div>' +
+                    '<button type="button" class="btn btn-sm btn-outline-danger ms-2 delete-planned-hire" ' +
+                        'data-ph-id="' + data.column_key + '" title="Remove planned hire">' +
+                        '<i class="bi bi-x-lg"></i></button>';
+                empList.appendChild(li);
+                nameInput.value = "";
+            }
+            nameInput.disabled = false;
+            document.getElementById("add-planned-hire").disabled = false;
+        });
+    });
+
+    // Delete planned hire
+    document.addEventListener("click", function(e) {
+        var btn = e.target.closest(".delete-planned-hire");
+        if (!btn) return;
+        var phId = btn.dataset.phId;
+        var pk = phId.replace("ph_", "");
+        if (!confirm("Remove this planned hire column?")) return;
+
+        fetch(phDeleteBase + pk + "/delete/", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": csrfToken,
+            },
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.ok) {
+                var li = btn.closest("li");
+                if (li) li.remove();
+            }
+        });
+    });
+
+    // Handle Enter key in planned hire input
+    document.getElementById("planned-hire-name")?.addEventListener("keydown", function(e) {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            document.getElementById("add-planned-hire")?.click();
+        }
     });
 })();
 </script>

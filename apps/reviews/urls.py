@@ -43,6 +43,8 @@ urlpatterns = [
     path("mp/", views.mp_spreadsheet, name="mp_spreadsheet"),
     path("mp/reorder/", views.mp_reorder, name="mp_reorder"),
     path("mp/export/<int:year>/<int:month>/", views.mp_export_xlsx, name="mp_export_xlsx"),
+    path("mp/planned-hire/add/", views.mp_add_planned_hire, name="mp_add_planned_hire"),
+    path("mp/planned-hire/<int:pk>/delete/", views.mp_delete_planned_hire, name="mp_delete_planned_hire"),
 
     # Payroll Partner Views
     path("payroll/", views.payroll_dashboard, name="payroll_dashboard"),
